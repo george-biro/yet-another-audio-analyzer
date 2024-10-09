@@ -40,18 +40,24 @@ import time
 import sys
 import argparse
 
+class CustomHelpFormatter(argparse.HelpFormatter):
+    def _get_help_string(self, action):
+        help = action.help
+        if action.default is not argparse.SUPPRESS:
+            help += f' (default: {action.default})'
+        return help
 parser = argparse.ArgumentParser(
                     prog='Yet another Audio analisator',
                     usage='%(prog)s [options]',
-                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("--rload", type=float, default=8)
-parser.add_argument("--vrange", type=float, default=1)
-parser.add_argument("--thd", type=int, default=3)
-parser.add_argument("--dev", type=int, default=0)
-parser.add_argument("--srate", type=int, default=44200)
-parser.add_argument("--chunk", type=int, default=32768)
-parser.add_argument("--chan", type=int, default=1)
-parser.add_argument("--res", type=int, default=16)
+                    formatter_class=CustomHelpFormatter)
+parser.add_argument("--rload", type=float, default=8, help="Load resistor in ohm")
+parser.add_argument("--vrange", type=float, default=1, help="ADC voltage range in volt")
+parser.add_argument("--thd", type=int, default=3, help="Number of harmonics for THD calculation")
+parser.add_argument("--dev", type=int, default=0, help="Id of sound device")
+parser.add_argument("--srate", type=int, default=44200, help="Sample rate")
+parser.add_argument("--chunk", type=int, default=32768, help="Chunk size")
+parser.add_argument("--chan", type=int, default=1, help="Number of channels")
+parser.add_argument("--res", type=int, default=16, help="ADC resolution")
 args = parser.parse_args()
 
 Rload = args.rload      # load resistor
@@ -69,6 +75,7 @@ elif (args.res == 32):
     dtype = np.int32
     adc_res = 2147483648
 else:
+    print("Invalid ADC resolution!")
     quit()
 
 
