@@ -38,22 +38,46 @@ import pyaudio
 # import sounddevice as sd
 import time
 import sys
+import argparse
 
-Rload = 8               # load resistor
-Vrange = 1              # voltage range of ADC
-thdNum = 99             # number of harmonics to be checked
+parser = argparse.ArgumentParser(
+                    prog='Yet another Audio analisator',
+                    usage='%(prog)s [options]',
+                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument("--rload", type=float, default=8)
+parser.add_argument("--vrange", type=float, default=1)
+parser.add_argument("--thd", type=int, default=3)
+parser.add_argument("--dev", type=int, default=0)
+parser.add_argument("--srate", type=int, default=44200)
+parser.add_argument("--chunk", type=int, default=32768)
+parser.add_argument("--chan", type=int, default=1)
+parser.add_argument("--res", type=int, default=16)
+args = parser.parse_args()
+
+Rload = args.rload      # load resistor
+Vrange = args.vrange    # voltage range of ADC
+thdNum = args.thd       # number of harmonics to be checked
 ifreq = [ 7000, 60 ]    # intermodulation test frequencies
 #ifreq = [ 0, 0 ]
 
-iform = pyaudio.paInt16 # 16-bit resolution
-dtype = np.int16
-adc_res = 32768
+if (args.res == 16):
+    iform = pyaudio.paInt16 # 16-bit resolution
+    dtype = np.int16
+    adc_res = 32768
+elif (args.res == 32):
+    iform = pyaudio.paInt32 # 32-bit resolution
+    dtype = np.int32
+    adc_res = 2147483648
+else:
+    quit()
+
+
 #iform = pyaudio.paInt24 # 16-bit resolution
 #dtype = np.int24
-chans = 1               # 1 channel
-samp_rate = 44200       # sampling rate
-chunk = 32768           # FFT window size 
-dev_index = 0          # device index found (see printout)
+chans = args.chan       # 1 channel
+samp_rate = args.srate  # sampling rate
+chunk = args.chunk      # FFT window size 
+dev_index = args.dev    # device index found (see printout)
 
 def list_sound_devices(audio):
     host = 0
@@ -74,46 +98,53 @@ def dbPow(k):
         return float('nan')
     return 10.*math.log10(k)
 
-def carrier(w,f,h):
+def carrier(w,w2,f,h):
     ci = np.argmax(w)
     cf = np.array([f[ci]])
     cw = np.array([w[ci]])
+    cw2 = np.array([w2[ci]])
     if (ci > 0):
         i = ci * 2
         N = len(w)
         while (i < N) and (h > 0):
             cf = np.append(cf, f[i])
             cw = np.append(cw, w[i])
+            cw2 = np.append(cw2, w2[i])
             i = i + ci
             h = h - 1
 
-    return cw,cf
+    return cw,cw2,cf
 
-def thd(cw):
-    if (len(cw) < 1):
+def thd(cw2):
+    if (len(cw2) < 1):
         return float('nan'), float('nan')
 
-    # harmonics
-    h = (np.sum(np.square(cw)) - cw[0]**2)**0.5
-    k = h / cw[0]
+    k = ((np.sum(cw2) - cw2[0]) / cw2[0])**0.5
     return dbRel(k), (100.*k)
 
 # same a sinad
-def thdn(X,cw):
-    if (len(cw) < 1) or (len(X) < 1):
+def thdn(w2,cw2):
+    if (len(cw2) < 1) or (len(w2) < 1):
         return float('nan'), float('nan')
+    
     # all harmonics except DC
-    sn = (np.sum(np.square(X)) - X[0]**2.0 - cw[0]**2.0)**0.5
-    k = sn / cw[0]
+    sn = (np.sum(w2) - w2[0] - cw2[0])
+    if (sn < 0):
+        return float('nan'), float('nan')
+
+    k = (sn / cw2[0])**0.5
     return dbRel(k), (100.*k)
 
-def snr(w, cw):
-    if (len(cw) < 1) or (len(w) < 1):
-        return float('nan'), float('nan')
+def snr(w2, cw2):
+    if (len(cw2) < 1) or (len(w2) < 1):
+        return float('nan')
 
-    sig = np.sum(np.square(cw))
-    ns = np.sum(np.square(w)) - w[0]**2.0 - sig;
-    k = sig / ns
+    sig = np.sum(cw2)
+    ns = np.sum(w2) - w2[0] - sig;
+    if (ns < 0):
+        return float('nan')
+
+    k = (sig / ns)**0.5
     return dbPow(k)
 
 def enob(sinad):
@@ -126,16 +157,16 @@ def ifind(arr, val):
     darr = np.absolute(arr - abs(val))
     return darr.argmin()
 
-def isum(w, lst):
+def isum(w2, lst):
     s = 0.
     for x in lst:
-        if (x < len(w)):
-            s = s + w[x]**2
+        if (x < len(w2)):
+            s = s + w2[x]
     return s
 
-def imd(w, a, b):
-    sig = isum(w, [ a, b])
-    hmc = isum(w, [ abs(a-b), 2*a, a+b, 2*b, abs(2*a-b), abs(2*b-a), 2*a+b, a+2*b, 3*a, 3*b ])
+def imd(w2, a, b):
+    sig = isum(w2, [ a, b])
+    hmc = isum(w2, [ abs(a-b), 2*a, a+b, 2*b, abs(2*a-b), abs(2*b-a), 2*a+b, a+2*b, 3*a, 3*b ])
     k = hmc / sig
     return dbPow(k), (k*100)
 
@@ -157,10 +188,10 @@ fig.subplots_adjust(left=.05, bottom=None, right=None, top=None, wspace=None, hs
 skip0.axis("off")
 skip1.axis("off")
 skip2.axis("off")
-wmax = 0
 
 flist = abs(np.fft.fftfreq(chunk) * samp_rate)
 iifreq = [ ifind(flist, ifreq[0]),  ifind(flist, ifreq[1]) ]
+
 
 try:
     while True:
@@ -179,7 +210,7 @@ try:
         ax1.set_ylabel('Amplitude (V)')
         ax1.set_xlim([0, tmax])
         ax1.set_ylim([-1, 1])
-        ax1.plot(ts, meas)
+        ax1.plot(ts, meas, 'g')
         ax1.grid()
 
         # compute furie and the related freq values
@@ -200,26 +231,26 @@ try:
         rmsW = rmsV**2 / Rload
 
         # freq domain calculations
-        cw,cf = carrier(w, flist, thdNum)
- 
-        THD, THDP = thd(cw)
-        SINAD, SINADP = thdn(w,cw)
-        SNR = snr(w, cw)
+        w2 = np.square(w)
+        cw, cw2, cf = carrier(w, w2, flist, thdNum)
+        THD, THDP = thd(cw2)
+        SINAD, SINADP = thdn(w2,cw2)
+        SNR = snr(w2, cw2)
         imdMode = checkImd(iifreq)
         if imdMode:
-            IMD, IMDP = imd(w, iifreq[0], iifreq[1])
+            IMD, IMDP = imd(w2, iifreq[0], iifreq[1])
 
 #displaying
         # manage axles
         ax2.cla()
         ax2.set_title('Frequency Domain', loc='left')
         ax2.set_xlabel('Frequency (Hz)')
-        ax2.set_ylabel('Amplitude (V)')
+        ax2.set_ylabel('Amplitude (dB)')
         ax2.set_xlim([0, flist[N-1]])
-        wmax = math.floor(max(wmax, np.max(w)) * 100 + 1) / 100
-        ax2.set_ylim([0, wmax])
-        ax2.plot(flist, w)
-        ax2.scatter(cf, cw)
+        ax2.set_ylim([-120, 0])
+        ax2.plot(flist, 20*np.log10(w), 'b-')
+        if (len(cf) != len(cw)):
+            ax2.scatter(cf, 20*np.log10(cw), 'r')
         ax2.grid()
         if (len(cf) > 0):
             t0 = plt.text(0.5, .1, "Base: %5.1fHz" % cf[0], transform=fig.dpi_scale_trans, fontfamily='monospace')
@@ -247,7 +278,6 @@ try:
         
         plt.pause(.01)
 
-        wmax = wmax * 0.9
         if (len(cf) > 0):
             t0.remove()
         t1.remove()
