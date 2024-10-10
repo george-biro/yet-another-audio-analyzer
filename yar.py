@@ -58,6 +58,7 @@ parser.add_argument("--srate", type=int, default=44200, help="Sample rate")
 parser.add_argument("--chunk", type=int, default=32768, help="Chunk size")
 parser.add_argument("--chan", type=int, default=1, help="Number of channels")
 parser.add_argument("--res", type=int, default=16, help="ADC resolution")
+parser.add_argument("--list", action='store_true')
 args = parser.parse_args()
 
 Rload = args.rload      # load resistor
@@ -183,7 +184,9 @@ def checkImd(iifreq):
 
 # list_cards()
 audio = pyaudio.PyAudio()
-list_sound_devices(audio)
+if args.list:
+    list_sound_devices(audio)
+    quit()
 
 # create pyaudio stream
 stream = audio.open(format = iform,rate = samp_rate,channels = chans, input_device_index = dev_index,input = True, frames_per_buffer=chunk)
