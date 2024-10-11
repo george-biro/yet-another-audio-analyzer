@@ -66,8 +66,8 @@ def carrier(w,w2,f,h):
     cw2 = np.array([w2[ci]])
     if (ci > 0):
         i = 2 * ci
-        N = len(w)
-        while (i < N) and (h > 0):
+        n = len(w)
+        while (i < n) and (h > 0):
             cf = np.append(cf, f[i])
             cw = np.append(cw, w[i])
             cw2 = np.append(cw2, w2[i])
@@ -84,7 +84,7 @@ def thd(cw2):
         return float('nan'), float('nan')
 
     rh = ((np.sum(cw2) - cw2[0]) / (len(cw2) - 1))
-    if (rh < 1e-6):
+    if (rh < 1e-100):
         return float('nan'), float('nan')
     k = (rh / cw2[0])**0.5
     return dbRel(k), (100.*k)
@@ -96,7 +96,7 @@ def thdn(w2,cw2):
     
     # all harmonics except DC
     sn = (np.sum(w2) - w2[0] - cw2[0]) / (len(w2) - 2)
-    if (sn < 0):
+    if (sn < 1e-100):
         return float('nan'), float('nan')
 
     k = (sn / cw2[0])**0.5
@@ -189,6 +189,7 @@ samp_rate = args.srate  # sampling rate
 duration = round(args.duration * samp_rate / chunk)
 dev_index = args.dev    # device index found (see printout)
 if args.mono:
+    print("MONO mode!")
     chnum = 1
 else:
     chnum = 2
@@ -221,6 +222,7 @@ iifreq = [ ifind(flist, ifreq[0]),  ifind(flist, ifreq[1]) ]
 tmax = chunk / samp_rate * 1000.0
 ts = np.linspace(0, tmax, chunk) 
 
+print("carrier,thd,thd db,thdn, thdn db,snr,Vrms,Prms")
 
 try:
     for xx in range(0, duration):
@@ -241,17 +243,15 @@ try:
         ax1.set_title('Time Domain', loc='left')
         ax1.set_xlabel('Time (ms)')
         ax1.set_ylabel('Amplitude (V)')
-        ax1.set_xlim([0, tmax])
+        ax1.set_xlim([0, min(tmax, 50)])
         ax1.set_ylim([-5, 5])
         ax1.plot(ts, meas, 'g')
         ax1.grid()
 
         # compute furie and the related freq values
-        w = np.abs(np.fft.fft(meas))[:N]
-        w = w * (0.5 / N)
-    
-        # drop second half
-        w = w[:N]
+        w = (np.abs(np.fft.fft(meas))[:N]) * (0.5 / N)
+        if (len(w) != len(flist)):
+            quit()
 
         # time domain calculations
         Vpp = np.max(meas) - np.min(meas)
@@ -262,13 +262,16 @@ try:
         # freq domain calculations
         w2 = np.square(w)
         cw, cw2, cf = carrier(w, w2, flist, thdNum)
+        print("cw ", cw)
         THD, THDP = thd(cw2)
         SINAD, SINADP = thdn(w2,cw2)
         SNR = snr(w2, cw2)
         imdMode = checkImd(iifreq)
         if imdMode:
             IMD, IMDP = imd(w2, iifreq[0], iifreq[1])
-
+        
+        if (len(cw) > 2):
+            print("%g,%g,%g,%g,%g,%g,%g,%g" % (cf[0], THD, THDP, SINAD, SINADP, SNR, Vrms,Prms))
 #displaying
         # manage axles
         ax2.cla()
