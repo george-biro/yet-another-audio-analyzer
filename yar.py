@@ -2,7 +2,6 @@
 #
 # Yet Another audio analyzeR
 #
-#
 # Copyright 2024 George Biro
 #
 # Permission to use, copy, modify, distribute, and sell this 
@@ -137,6 +136,8 @@ def imd(w2, a, b):
 def checkImd(iifreq):
     return ((iifreq[0] != iifreq[1]) and (iifreq[0] != 0) and (iifreq[1] != 0))
 
+
+
 class CustomHelpFormatter(argparse.HelpFormatter):
     def _get_help_string(self, action):
         help = action.help
@@ -206,7 +207,11 @@ skip=1024
 # create pyaudio stream
 stream = audio.open(format = iform,rate = samp_rate,channels = chnum, input_device_index = dev_index,input = True, frames_per_buffer=chunk+skip)
 
+def on_press(event):
+    quit()
+
 fig, (skip0, ax1, skip1, ax2, skip2) = plt.subplots(5,1,figsize=(16,9), gridspec_kw={'height_ratios': [.1, 2, .01, 6, .2]})
+fig.canvas.mpl_connect('key_press_event', on_press)
 fig.suptitle('Yet another Audio analyseR')
 fig.tight_layout()
 fig.subplots_adjust(left=.05, bottom=None, right=None, top=None, wspace=None, hspace=None)
@@ -224,110 +229,106 @@ ts = np.linspace(0, tmax, chunk)
 
 print("carrier,thd,thd db,thdn, thdn db,snr,Vrms,Prms")
 
-try:
-    for xx in range(0, duration):
+for xx in range(0, duration):
 
-        # record data chunk 
-        stream.start_stream()
-        data = stream.read(chunk + skip, exception_on_overflow=False)
-        stream.stop_stream()
-        meas = np.frombuffer(data, dtype=dtype)[skip*chnum:]
-        if chnum > 1:
-            meas = meas[chsel::2]
-        meas = meas * (Vrange / adc_res)
+    # record data chunk 
+    stream.start_stream()
+    data = stream.read(chunk + skip, exception_on_overflow=False)
+    stream.stop_stream()
+    meas = np.frombuffer(data, dtype=dtype)[skip*chnum:]
+    if chnum > 1:
+        meas = meas[chsel::2]
+    meas = meas * (Vrange / adc_res)
 
-        if len(meas) < 16:
-            quit()
+    if len(meas) < 16:
+        quit()
         
-        ax1.cla()
-        ax1.set_title('Time Domain', loc='left')
-        ax1.set_xlabel('Time (ms)')
-        ax1.set_ylabel('Amplitude (V)')
-        ax1.set_xlim([0, min(tmax, 50)])
-        ax1.set_ylim([-5, 5])
-        ax1.plot(ts, meas, 'g')
-        ax1.grid()
+    ax1.cla()
+    ax1.set_title('Time Domain', loc='left')
+    ax1.set_xlabel('Time (ms)')
+    ax1.set_ylabel('Amplitude (V)')
+    ax1.set_xlim([0, min(tmax, 50)])
+    ax1.set_ylim([-5, 5])
+    ax1.plot(ts, meas, 'g')
+    ax1.grid()
 
-        # compute furie and the related freq values
-        w = (np.abs(np.fft.fft(meas))[:N]) * (0.5 / N)
-        if (len(w) != len(flist)):
-            quit()
+    # compute furie and the related freq values
+    w = (np.abs(np.fft.fft(meas))[:N]) * (0.5 / N)
+    if (len(w) != len(flist)):
+        quit()
 
-        # time domain calculations
-        Vpp = np.max(meas) - np.min(meas)
-        Ppeak = np.max(np.square(meas)) / Rload
-        Vrms = rms(meas)
-        Prms = Vrms**2 / Rload
+    # time domain calculations
+    Vpp = np.max(meas) - np.min(meas)
+    Ppeak = np.max(np.square(meas)) / Rload
+    Vrms = rms(meas)
+    Prms = Vrms**2 / Rload
 
-        # freq domain calculations
-        w2 = np.square(w)
-        cw, cw2, cf = carrier(w, w2, flist, thdNum)
-        print("cw ", cw)
-        THD, THDP = thd(cw2)
-        SINAD, SINADP = thdn(w2,cw2)
-        SNR = snr(w2, cw2)
-        imdMode = checkImd(iifreq)
-        if imdMode:
-            IMD, IMDP = imd(w2, iifreq[0], iifreq[1])
+     # freq domain calculations
+    w2 = np.square(w)
+    cw, cw2, cf = carrier(w, w2, flist, thdNum)
+    print("cw ", cw)
+    THD, THDP = thd(cw2)
+    SINAD, SINADP = thdn(w2,cw2)
+    SNR = snr(w2, cw2)
+    imdMode = checkImd(iifreq)
+    if imdMode:
+        IMD, IMDP = imd(w2, iifreq[0], iifreq[1])
         
-        if (len(cw) > 2):
-            print("%g,%g,%g,%g,%g,%g,%g,%g" % (cf[0], THD, THDP, SINAD, SINADP, SNR, Vrms,Prms))
+    if (len(cw) > 2):
+        print("%g,%g,%g,%g,%g,%g,%g,%g" % (cf[0], THD, THDP, SINAD, SINADP, SNR, Vrms,Prms))
 #displaying
-        # manage axles
-        ax2.cla()
-        ax2.set_title('Frequency Domain', loc='left')
-        ax2.set_xlabel('Frequency (Hz)')
-        ax2.set_ylabel('Amplitude (dB)')
-        ax2.set_xlim([0, fmax])
-        ax2.set_ylim([-160, 0])
-        ax2.plot(flist, 20*np.log10(w), 'b-')
-        if (len(cf) != len(cw)):
-            ax2.scatter(cf, 20*np.log10(cw), 'r')
-        ax2.grid()
-        if (len(cf) > 0):
-            t0 = plt.text(0.5, .1, "Base: %5.1fHz" % cf[0], transform=fig.dpi_scale_trans, fontfamily='monospace')
+    # manage axles
+    ax2.cla()
+    ax2.set_title('Frequency Domain', loc='left')
+    ax2.set_xlabel('Frequency (Hz)')
+    ax2.set_ylabel('Amplitude (dB)')
+    ax2.set_xlim([0, fmax])
+    ax2.set_ylim([-160, 0])
+    ax2.plot(flist, 20*np.log10(w), 'b-')
+    if (len(cf) != len(cw)):
+         ax2.scatter(cf, 20*np.log10(cw), 'r')
+    ax2.grid()
+    if (len(cf) > 0):
+         t0 = plt.text(0.5, .1, "Base: %5.1fHz" % cf[0], transform=fig.dpi_scale_trans, fontfamily='monospace')
 
-        t1 = plt.text(2.5, .3, "   Vpp: %5.1fV" % Vpp, transform=fig.dpi_scale_trans,  fontfamily='monospace')
-        t2 = plt.text(2.5, .1, " Ppeak: %5.1fW" % Ppeak, transform=fig.dpi_scale_trans,  fontfamily='monospace')
+    t1 = plt.text(2.5, .3, "   Vpp: %5.1fV" % Vpp, transform=fig.dpi_scale_trans,  fontfamily='monospace')
+    t2 = plt.text(2.5, .1, " Ppeak: %5.1fW" % Ppeak, transform=fig.dpi_scale_trans,  fontfamily='monospace')
 
-        t3 = plt.text(4.5, .3, "  Eff: %5.1fV" % Vrms, transform=fig.dpi_scale_trans, fontfamily='monospace')
-        t4 = plt.text(4.5, .1, "E Pwr: %5.1fW" % Prms, transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t3 = plt.text(4.5, .3, "  Eff: %5.1fV" % Vrms, transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t4 = plt.text(4.5, .1, "E Pwr: %5.1fW" % Prms, transform=fig.dpi_scale_trans, fontfamily='monospace')
 
-        t5 = plt.text(6.5, .5,  "Range: %3.1fV" % Vrange, transform=fig.dpi_scale_trans, fontfamily='monospace')
-        t6 = plt.text(6.5, .3,  " Load: %3.1fohm" % Rload, transform=fig.dpi_scale_trans, fontfamily='monospace') 
-        t7 = plt.text(6.5, .1,  "Wsize: %5d#" % chunk, transform=fig.dpi_scale_trans, fontfamily='monospace') 
+    t5 = plt.text(6.5, .5,  "Range: %3.1fV" % Vrange, transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t6 = plt.text(6.5, .3,  " Load: %3.1fohm" % Rload, transform=fig.dpi_scale_trans, fontfamily='monospace') 
+    t7 = plt.text(6.5, .1,  "Wsize: %5d#" % chunk, transform=fig.dpi_scale_trans, fontfamily='monospace') 
     
 
-        t8 = plt.text(11, .5, "THD(%02d): %5.1fdB (%6.3f%%)" % (thdNum, THD, THDP), transform=fig.dpi_scale_trans, fontfamily='monospace') 
-        t9 = plt.text(11, .3, "  THD-N: %5.1fdB" % (SINAD), transform=fig.dpi_scale_trans, fontfamily='monospace')
-        t10 = plt.text(11, .1, "    SNR: %5.1fdB" % (SNR), transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t8 = plt.text(11, .5, "THD(%02d): %5.1fdB (%6.3f%%)" % (thdNum, THD, THDP), transform=fig.dpi_scale_trans, fontfamily='monospace') 
+    t9 = plt.text(11, .3, "  THD-N: %5.1fdB" % (SINAD), transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t10 = plt.text(11, .1, "    SNR: %5.1fdB" % (SNR), transform=fig.dpi_scale_trans, fontfamily='monospace')
 
-        if imdMode:
-            t11 = plt.text(9, .5, "IMD: %5.1fdB (%4.2f%%)" % (IMD, IMDP), transform=fig.dpi_scale_trans, fontfamily='monospace')
-            t12 = plt.text(9, .3, " F1: %5.1fHz" % flist[iifreq[0]], transform=fig.dpi_scale_trans, fontfamily='monospace') 
-            t13 = plt.text(9, .1, " F2: %5.1fHz" % flist[iifreq[1]], transform=fig.dpi_scale_trans, fontfamily='monospace')
+    if imdMode:
+        t11 = plt.text(9, .5, "IMD: %5.1fdB (%4.2f%%)" % (IMD, IMDP), transform=fig.dpi_scale_trans, fontfamily='monospace')
+        t12 = plt.text(9, .3, " F1: %5.1fHz" % flist[iifreq[0]], transform=fig.dpi_scale_trans, fontfamily='monospace') 
+        t13 = plt.text(9, .1, " F2: %5.1fHz" % flist[iifreq[1]], transform=fig.dpi_scale_trans, fontfamily='monospace')
 
         
-        plt.pause(.01)
+    plt.pause(.01)
 
-        if (len(cf) > 0):
-            t0.remove()
-        t1.remove()
-        t2.remove()
-        t3.remove()
-        t4.remove()
-        t5.remove()
-        t6.remove()
-        t7.remove()
-        t8.remove()
-        t9.remove()
-        t10.remove()
+    if (len(cf) > 0):
+        t0.remove()
+    t1.remove()
+    t2.remove()
+    t3.remove()
+    t4.remove()
+    t5.remove()
+    t6.remove()
+    t7.remove()
+    t8.remove()
+    t9.remove()
+    t10.remove()
 
-        if imdMode:
-            t11.remove()
-            t12.remove()
-            t13.remove()
+    if imdMode:
+        t11.remove()
+        t12.remove()
+        t13.remove()
 
-
-except KeyboardInterrupt:
-    pass
