@@ -4,32 +4,20 @@
 #
 # Copyright 2024 George Biro
 #
-# Permission to use, copy, modify, distribute, and sell this 
-# software and its documentation for any purpose is hereby 
-# granted without fee, provided that the above copyright notice 
-# appear in all copies and that both that copyright notice and 
-# this permission notice appear in supporting documentation.
+# This program is free software: you can redistribute it and/or modify it 
+# under the terms of the GNU General Public License as published by the 
+# Free Software Foundation, either version 3 of the License, or 
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful, but 
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY 
+# or FITNESS FOR A PARTICULAR PURPOSE. 
+# 
+# See the GNU General Public License for more details.
 #
-# The above copyright notice and this permission notice shall be 
-# included in all copies or substantial portions of the Software.
+# You should have received a copy of the GNU General Public License along 
+# with this program. If not, see <https://www.gnu.org/licenses/>. 
 #
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
-# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES 
-# OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND 
-# NONINFRINGEMENT. IN NO EVENT SHALL THE OPEN GROUP BE LIABLE FOR 
-# ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF 
-# CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
-# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN 
-# THE SOFTWARE.
-#
-#
-# Except as contained in this notice, the name of George Biro
-# shall not be used in advertising or otherwise to promote the 
-# sale, use or other dealings in this Software without prior 
-# written authorization from George Biro.
-#
-#
-
 import math
 import matplotlib.pyplot as plt
 import numpy as np
