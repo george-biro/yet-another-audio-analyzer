@@ -80,15 +80,18 @@ def rms(meas):
     return (np.sum(np.square(meas)) / len(meas))**0.5
 
 def thd(cw2):
-    if (len(cw2) < 1):
+    if (len(cw2) < 2) or (cw2[0] < 1e-6):
         return float('nan'), float('nan')
- 
-    k = ((np.sum(cw2) - cw2[0]) / cw2[0])**0.5
+
+    rh = ((np.sum(cw2) - cw2[0]) / (len(cw2) - 1))
+    if (rh < 1e-6):
+        return float('nan'), float('nan')
+    k = (rh / cw2[0])**0.5
     return dbRel(k), (100.*k)
 
 # same a sinad
 def thdn(w2,cw2):
-    if (len(cw2) < 1) or (len(w2) < 1):
+    if (len(cw2) < 2) or (len(w2) < 2) or (cw2[0] < 1e-6):
         return float('nan'), float('nan')
     
     # all harmonics except DC
@@ -100,11 +103,11 @@ def thdn(w2,cw2):
     return dbRel(k), (100.*k)
 
 def snr(w2, cw2):
-    if (len(cw2) < 1) or (len(w2) < 1):
+    if (len(cw2) < 2) or (len(w2) < 2):
         return float('nan')
 
     sig = np.sum(cw2)
-    ns = np.sum(w2) - w2[0] - sig;
+    ns = (np.sum(w2) - w2[0] - sig) / (len(w2) - 1 - len(cw2));
     if (ns < 0):
         return float('nan')
 
