@@ -40,53 +40,6 @@ import time
 import sys
 import argparse
 
-class CustomHelpFormatter(argparse.HelpFormatter):
-    def _get_help_string(self, action):
-        help = action.help
-        if action.default is not argparse.SUPPRESS:
-            help += f' (default: {action.default})'
-        return help
-parser = argparse.ArgumentParser(
-                    prog='Yet another Audio analisator',
-                    usage='%(prog)s [options]',
-                    formatter_class=CustomHelpFormatter)
-parser.add_argument("--rload", type=float, default=8, help="Load resistor in ohm")
-parser.add_argument("--vrange", type=float, default=1, help="ADC voltage range in volt")
-parser.add_argument("--thd", type=int, default=3, help="Number of harmonics for THD calculation")
-parser.add_argument("--dev", type=int, default=0, help="Id of sound device")
-parser.add_argument("--srate", type=int, default=44200, help="Sample rate")
-parser.add_argument("--chunk", type=int, default=32768, help="Chunk size")
-parser.add_argument("--chan", type=int, default=1, help="Number of channels")
-parser.add_argument("--res", type=int, default=16, help="ADC resolution")
-parser.add_argument("--list", action='store_true')
-args = parser.parse_args()
-
-Rload = args.rload      # load resistor
-Vrange = args.vrange    # voltage range of ADC
-thdNum = args.thd       # number of harmonics to be checked
-ifreq = [ 7000, 60 ]    # intermodulation test frequencies
-#ifreq = [ 0, 0 ]
-
-if (args.res == 16):
-    iform = pyaudio.paInt16 # 16-bit resolution
-    dtype = np.int16
-    adc_res = 32768
-elif (args.res == 32):
-    iform = pyaudio.paInt32 # 32-bit resolution
-    dtype = np.int32
-    adc_res = 2147483648
-else:
-    print("Invalid ADC resolution!")
-    quit()
-
-
-#iform = pyaudio.paInt24 # 16-bit resolution
-#dtype = np.int24
-chans = args.chan       # 1 channel
-samp_rate = args.srate  # sampling rate
-chunk = args.chunk      # FFT window size 
-dev_index = args.dev    # device index found (see printout)
-
 def list_sound_devices(audio):
     host = 0
     info = audio.get_host_api_info_by_index(host)
@@ -112,7 +65,7 @@ def carrier(w,w2,f,h):
     cw = np.array([w[ci]])
     cw2 = np.array([w2[ci]])
     if (ci > 0):
-        i = ci * 2
+        i = 2 * ci
         N = len(w)
         while (i < N) and (h > 0):
             cf = np.append(cf, f[i])
@@ -123,10 +76,13 @@ def carrier(w,w2,f,h):
 
     return cw,cw2,cf
 
+def rms(meas):
+    return (np.sum(np.square(meas)) / len(meas))**0.5
+
 def thd(cw2):
     if (len(cw2) < 1):
         return float('nan'), float('nan')
-
+ 
     k = ((np.sum(cw2) - cw2[0]) / cw2[0])**0.5
     return dbRel(k), (100.*k)
 
@@ -136,7 +92,7 @@ def thdn(w2,cw2):
         return float('nan'), float('nan')
     
     # all harmonics except DC
-    sn = (np.sum(w2) - w2[0] - cw2[0])
+    sn = (np.sum(w2) - w2[0] - cw2[0]) / (len(w2) - 2)
     if (sn < 0):
         return float('nan'), float('nan')
 
@@ -158,9 +114,6 @@ def snr(w2, cw2):
 def enob(sinad):
     return ((sinad - 1.76) / 6.02)
 
-def eff(meas):
-    return (np.sum(np.square(meas)) / len(meas))**0.5
-
 def ifind(arr, val):
     darr = np.absolute(arr - abs(val))
     return darr.argmin()
@@ -181,6 +134,62 @@ def imd(w2, a, b):
 def checkImd(iifreq):
     return ((iifreq[0] != iifreq[1]) and (iifreq[0] != 0) and (iifreq[1] != 0))
 
+class CustomHelpFormatter(argparse.HelpFormatter):
+    def _get_help_string(self, action):
+        help = action.help
+        if action.default is not argparse.SUPPRESS:
+            help += f' (default: {action.default})'
+        return help
+
+# Begin of the program
+parser = argparse.ArgumentParser(
+                    prog='Yet another Audio analisator',
+                    usage='%(prog)s [options]',
+                    formatter_class=CustomHelpFormatter)
+parser.add_argument("--rload", type=float, default=8, help="Load resistor in ohm")
+parser.add_argument("--vrange", type=float, default=61, help="ADC voltage range in volt")
+parser.add_argument("--thd", type=int, default=3, help="Number of harmonics for THD calculation")
+parser.add_argument("--dev", type=int, default=4, help="Id of sound device")
+parser.add_argument("--srate", type=int, default=192000, help="Sample rate")
+parser.add_argument("--chunk", type=int, default=65536, help="Chunk size")
+parser.add_argument("--ch", type=int, default=0, help="Selected channel")
+parser.add_argument("--res", type=int, default=32, help="ADC resolution")
+parser.add_argument("--duration", type=int, default=5, help="time to exit")
+parser.add_argument("--mono", action='store_true')
+parser.add_argument("--list", action='store_true')
+args = parser.parse_args()
+
+Rload = args.rload
+Vrange = args.vrange    # voltage range of ADC
+thdNum = args.thd       # number of harmonics to be checked
+ifreq = [ 7000, 60 ]    # intermodulation test frequencies
+#ifreq = [ 0, 0 ]
+
+if (args.res == 16):
+    iform = pyaudio.paInt16 # 16-bit resolution
+    dtype = np.int16
+    adc_res = 2**15
+elif (args.res == 32):
+    iform = pyaudio.paInt32 # 32-bit resolution
+    dtype = np.int32
+    adc_res = 2**31
+else:
+    print("Invalid ADC resolution!")
+    quit()
+
+
+#iform = pyaudio.paInt24 # 16-bit resolution
+#dtype = np.int24
+chsel = args.ch       # 1 channel
+chunk = args.chunk      # FFT window size 
+samp_rate = args.srate  # sampling rate
+duration = round(args.duration * samp_rate / chunk)
+dev_index = args.dev    # device index found (see printout)
+if args.mono:
+    chnum = 1
+else:
+    chnum = 2
+
 
 # list_cards()
 audio = pyaudio.PyAudio()
@@ -189,7 +198,7 @@ if args.list:
     quit()
 
 # create pyaudio stream
-stream = audio.open(format = iform,rate = samp_rate,channels = chans, input_device_index = dev_index,input = True, frames_per_buffer=chunk)
+stream = audio.open(format = iform,rate = samp_rate,channels = chnum, input_device_index = dev_index,input = True, frames_per_buffer=chunk)
 
 fig, (skip0, ax1, skip1, ax2, skip2) = plt.subplots(5,1,figsize=(16,9), gridspec_kw={'height_ratios': [.1, 2, .01, 6, .2]})
 fig.suptitle('Yet another Audio analyseR')
@@ -199,45 +208,49 @@ skip0.axis("off")
 skip1.axis("off")
 skip2.axis("off")
 
-flist = abs(np.fft.fftfreq(chunk) * samp_rate)
+N = chunk // 2
+flist = abs(np.fft.fftfreq(chunk) * samp_rate)[:N]
+fmax = flist[ifind(flist, 50e3)]
 iifreq = [ ifind(flist, ifreq[0]),  ifind(flist, ifreq[1]) ]
+
+tmax = chunk / samp_rate * 1000.0
+ts = np.linspace(0, tmax, chunk) 
 
 
 try:
-    while True:
+    for xx in range(0, duration):
 
         # record data chunk 
         stream.start_stream()
-        data = stream.read(chunk)
+        data = stream.read(chunk, exception_on_overflow=False)
         stream.stop_stream()
-        meas = np.frombuffer(data, dtype=dtype) / adc_res * Vrange
-        tmax = chunk / samp_rate * 1000.0
-        ts = np.linspace(0, tmax, len(meas)) 
+        meas = np.frombuffer(data, dtype=dtype) * (Vrange / adc_res)
+        if chnum > 1:
+            meas = meas[chsel::2]
 
+        if len(meas) < 16:
+            quit()
+        
         ax1.cla()
         ax1.set_title('Time Domain', loc='left')
         ax1.set_xlabel('Time (ms)')
         ax1.set_ylabel('Amplitude (V)')
         ax1.set_xlim([0, tmax])
-        ax1.set_ylim([-1, 1])
+        ax1.set_ylim([-5, 5])
         ax1.plot(ts, meas, 'g')
         ax1.grid()
 
         # compute furie and the related freq values
-        w = np.abs(np.fft.fft(meas))
-        N = len(w)
-        w = w * (1 / N)
-     
-        N = N//2
+        w = np.abs(np.fft.fft(meas))[:N]
+        w = w * (0.5 / N)
     
         # drop second half
         w = w[:N]
-        flist = flist[:N]
 
         # time domain calculations
-        peakV = np.max(np.abs(meas))
-        peakW = peakV**2 / Rload
-        rmsV = eff(meas)
+        peakV = np.max(meas) - np.min(meas)
+        peakW = np.max(np.square(meas)) / Rload
+        rmsV = rms(meas)
         rmsW = rmsV**2 / Rload
 
         # freq domain calculations
@@ -256,8 +269,8 @@ try:
         ax2.set_title('Frequency Domain', loc='left')
         ax2.set_xlabel('Frequency (Hz)')
         ax2.set_ylabel('Amplitude (dB)')
-        ax2.set_xlim([0, flist[N-1]])
-        ax2.set_ylim([-120, 0])
+        ax2.set_xlim([0, fmax])
+        ax2.set_ylim([-160, 0])
         ax2.plot(flist, 20*np.log10(w), 'b-')
         if (len(cf) != len(cw)):
             ax2.scatter(cf, 20*np.log10(cw), 'r')
