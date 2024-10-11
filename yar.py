@@ -152,7 +152,8 @@ parser = argparse.ArgumentParser(
                     usage='%(prog)s [options]',
                     formatter_class=CustomHelpFormatter)
 parser.add_argument("--rload", type=float, default=8, help="Load resistor in ohm")
-parser.add_argument("--vrange", type=float, default=100, help="ADC voltage range in volt")
+parser.add_argument("--vrange", type=float, default=10, help="Display voltage range")
+parser.add_argument("--adcRng", type=float, default=100, help="ADC voltage range")
 parser.add_argument("--thd", type=int, default=3, help="Number of harmonics for THD calculation")
 parser.add_argument("--dev", type=int, default=4, help="Id of sound device")
 parser.add_argument("--srate", type=int, default=192000, help="Sample rate")
@@ -165,22 +166,31 @@ parser.add_argument("--list", action='store_true')
 parser.add_argument("--save", type=str, default="", help="export to file")
 parser.add_argument("--csv", type=str, default="", help="print to csv")
 parser.add_argument("--comment", type=str, default="", help="csv comment")
+parser.add_argument("--ifreqA", type=float, default="0", help="intermodulation freq A")
+parser.add_argument("--ifreqB", type=float, default="0", help="intermodulation freq B")
+parser.add_argument("--frange", type=float, default="20000", help="displayed frequency range")
+parser.add_argument("--trange", type=float, default="10", help="displayed time range")
+parser.add_argument("--wrange", type=float, default="-150", help="FFT range")
 args = parser.parse_args()
 
 Rload = args.rload
-Vrange = args.vrange    # voltage range of ADC
+Vrange = args.vrange   
+Frange = args.frange
+Trange = args.trange
+Wrange = args.wrange
+adcRng = args.adcRng    # voltage range of ADC
 thdNum = args.thd       # number of harmonics to be checked
-ifreq = [ 7000, 60 ]    # intermodulation test frequencies
+ifreq = [ args.ifreqA, args.ifreqB ]    # intermodulation test frequencies
 #ifreq = [ 0, 0 ]
 
 if (args.res == 16):
     iform = pyaudio.paInt16 # 16-bit resolution
     dtype = np.int16
-    adc_res = 2**15
+    adcRes = 2**15
 elif (args.res == 32):
     iform = pyaudio.paInt32 # 32-bit resolution
     dtype = np.int32
-    adc_res = 2**31
+    adcRes = 2**31
 else:
     print("Invalid ADC resolution!")
     quit()
@@ -188,7 +198,7 @@ else:
 
 #iform = pyaudio.paInt24 # 16-bit resolution
 #dtype = np.int24
-chsel = args.ch       # 1 channel
+chSel = args.ch       # 1 channel
 chunk = args.chunk      # FFT window size 
 samp_rate = args.srate  # sampling rate
 duration = max(1, round(args.duration * samp_rate / chunk))
@@ -225,7 +235,6 @@ skip2.axis("off")
 
 N = chunk // 2
 flist = abs(np.fft.fftfreq(chunk) * samp_rate)[:N]
-fmax = flist[ifind(flist, 50e3)]
 iifreq = [ ifind(flist, ifreq[0]),  ifind(flist, ifreq[1]) ]
 
 tmax = chunk / samp_rate * 1000.0
@@ -245,8 +254,8 @@ for xx in range(0, duration):
     stream.stop_stream()
     meas = np.frombuffer(data, dtype=dtype)[skip*chnum:]
     if chnum > 1:
-        meas = meas[chsel::2]
-    meas = meas * (Vrange / adc_res)
+        meas = meas[chSel::2]
+    meas = meas * (adcRng / adcRes)
 
     if len(meas) < 16:
         quit()
@@ -255,8 +264,8 @@ for xx in range(0, duration):
     ax1.set_title('Time Domain', loc='left')
     ax1.set_xlabel('Time (ms)')
     ax1.set_ylabel('Amplitude (V)')
-    ax1.set_xlim([0, min(tmax, 50)])
-    ax1.set_ylim([-5, 5])
+    ax1.set_xlim([0, min(tmax, Trange)])
+    ax1.set_ylim([-Vrange, Vrange])
     ax1.plot(ts, meas, 'g')
     ax1.grid()
 
@@ -291,8 +300,8 @@ for xx in range(0, duration):
     ax2.set_title('Frequency Domain', loc='left')
     ax2.set_xlabel('Frequency (Hz)')
     ax2.set_ylabel('Amplitude (dB)')
-    ax2.set_xlim([0, fmax])
-    ax2.set_ylim([-160, 0])
+    ax2.set_xlim([0, Frange])
+    ax2.set_ylim([Wrange, 0])
     ax2.plot(flist, 20*np.log10(w), 'b-')
     if (len(cf) != len(cw)):
          ax2.scatter(cf, 20*np.log10(cw), 'r')
