@@ -38,6 +38,7 @@ import pyaudio
 import time
 import sys
 import argparse
+import os.path
 
 def list_sound_devices(audio):
     host = 0
@@ -161,6 +162,8 @@ parser.add_argument("--res", type=int, default=32, help="ADC resolution")
 parser.add_argument("--duration", type=int, default=10, help="time to exit")
 parser.add_argument("--mono", action='store_true')
 parser.add_argument("--list", action='store_true')
+parser.add_argument("--save", type=str, default="", help="export to file")
+parser.add_argument("--csv", type=str, default="", help="print to csv")
 args = parser.parse_args()
 
 Rload = args.rload
@@ -227,7 +230,11 @@ iifreq = [ ifind(flist, ifreq[0]),  ifind(flist, ifreq[1]) ]
 tmax = chunk / samp_rate * 1000.0
 ts = np.linspace(0, tmax, chunk) 
 
-print("carrier,thd,thd db,thdn, thdn db,snr,Vrms,Prms")
+csvfile = args.csv 
+
+if (csvfile != "") and (not os.path.isfile(csvfile)):
+    f = open(csvfile, 'w+')
+    f.write("carrier,thd,thd db,thdn, thdn db,snr,Vrms,Prms\n")
 
 for xx in range(0, duration):
 
@@ -274,8 +281,9 @@ for xx in range(0, duration):
     if imdMode:
         IMD, IMDP = imd(w2, iifreq[0], iifreq[1])
         
-    if (len(cw) > 2):
-        print("%g,%g,%g,%g,%g,%g,%g,%g" % (cf[0], THD, THDP, SINAD, SINADP, SNR, Vrms,Prms))
+    if (len(cw) > 2) and (csvfile != ""):
+        f = open(csvfile, "a")
+        f.write("%g,%g,%g,%g,%g,%g,%g,%g\n" % (cf[0], THD, THDP, SINAD, SINADP, SNR, Vrms,Prms))
 #displaying
     # manage axles
     ax2.cla()
@@ -310,9 +318,10 @@ for xx in range(0, duration):
         t11 = plt.text(9, .5, "IMD: %5.1fdB (%4.2f%%)" % (IMD, IMDP), transform=fig.dpi_scale_trans, fontfamily='monospace')
         t12 = plt.text(9, .3, " F1: %5.1fHz" % flist[iifreq[0]], transform=fig.dpi_scale_trans, fontfamily='monospace') 
         t13 = plt.text(9, .1, " F2: %5.1fHz" % flist[iifreq[1]], transform=fig.dpi_scale_trans, fontfamily='monospace')
-
-        
+    
     plt.pause(.01)
+    if args.save != "":
+        plt.savefig(args.save)
 
     if (len(cf) > 0):
         t0.remove()
