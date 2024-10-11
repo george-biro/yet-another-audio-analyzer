@@ -164,6 +164,7 @@ parser.add_argument("--mono", action='store_true')
 parser.add_argument("--list", action='store_true')
 parser.add_argument("--save", type=str, default="", help="export to file")
 parser.add_argument("--csv", type=str, default="", help="print to csv")
+parser.add_argument("--comment", type=str, default="", help="csv comment")
 args = parser.parse_args()
 
 Rload = args.rload
@@ -190,7 +191,7 @@ else:
 chsel = args.ch       # 1 channel
 chunk = args.chunk      # FFT window size 
 samp_rate = args.srate  # sampling rate
-duration = round(args.duration * samp_rate / chunk)
+duration = max(1, round(args.duration * samp_rate / chunk))
 dev_index = args.dev    # device index found (see printout)
 if args.mono:
     print("MONO mode!")
@@ -234,7 +235,7 @@ csvfile = args.csv
 
 if (csvfile != "") and (not os.path.isfile(csvfile)):
     f = open(csvfile, 'w+')
-    f.write("carrier,thd,thd db,thdn, thdn db,snr,Vrms,Prms\n")
+    f.write("Carrier,THD,THD DB,THD-N,THD-N DB,SNR,Vrms,Prms,Comment\n")
 
 for xx in range(0, duration):
 
@@ -283,7 +284,7 @@ for xx in range(0, duration):
         
     if (len(cw) > 2) and (csvfile != ""):
         f = open(csvfile, "a")
-        f.write("%g,%g,%g,%g,%g,%g,%g,%g\n" % (cf[0], THD, THDP, SINAD, SINADP, SNR, Vrms,Prms))
+        f.write("%g,%g,%g,%g,%g,%g,%g,%g,%s\n" % (cf[0], THD, THDP, SINAD, SINADP, SNR, Vrms,Prms,args.comment))
 #displaying
     # manage axles
     ax2.cla()
