@@ -170,7 +170,8 @@ parser.add_argument("--ifreqA", type=float, default="0", help="intermodulation f
 parser.add_argument("--ifreqB", type=float, default="0", help="intermodulation freq B")
 parser.add_argument("--frange", type=float, default="20000", help="displayed frequency range")
 parser.add_argument("--trange", type=float, default="10", help="displayed time range")
-parser.add_argument("--wrange", type=float, default="-150", help="FFT range")
+parser.add_argument("--wrange", type=float, default="-150", help="FFT range in dB")
+parser.add_argument("--skip", type=int, default="1024", help="skip chunk")
 args = parser.parse_args()
 
 Rload = args.rload
@@ -180,6 +181,7 @@ Trange = args.trange
 Wrange = args.wrange
 adcRng = args.adcRng    # voltage range of ADC
 thdNum = args.thd       # number of harmonics to be checked
+skip = args.skip
 ifreq = [ args.ifreqA, args.ifreqB ]    # intermodulation test frequencies
 #ifreq = [ 0, 0 ]
 
@@ -215,8 +217,6 @@ audio = pyaudio.PyAudio()
 if args.list:
     list_sound_devices(audio)
     quit()
-
-skip=1024
 
 # create pyaudio stream
 stream = audio.open(format = iform,rate = samp_rate,channels = chnum, input_device_index = dev_index,input = True, frames_per_buffer=chunk+skip)
@@ -283,7 +283,6 @@ for xx in range(0, duration):
      # freq domain calculations
     w2 = np.square(w)
     cw, cw2, cf = carrier(w, w2, flist, thdNum)
-    print("cw ", cw)
     THD, THDP = thd(cw2)
     SINAD, SINADP = thdn(w2,cw2)
     SNR = snr(w2, cw2)
