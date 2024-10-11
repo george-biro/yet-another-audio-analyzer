@@ -224,8 +224,13 @@ stream = audio.open(format = iform,rate = samp_rate,channels = chnum, input_devi
 def on_press(event):
     quit()
 
+def on_close(event):
+    quit()
+
 fig, (skip0, ax1, skip1, ax2, skip2) = plt.subplots(5,1,figsize=(16,9), gridspec_kw={'height_ratios': [.1, 2, .01, 6, .2]})
 fig.canvas.mpl_connect('key_press_event', on_press)
+fig.canvas.mpl_connect('close_event', on_close)
+
 fig.suptitle('Yet another Audio analyseR')
 fig.tight_layout()
 fig.subplots_adjust(left=.05, bottom=None, right=None, top=None, wspace=None, hspace=None)
