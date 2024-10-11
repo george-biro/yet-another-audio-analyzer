@@ -150,14 +150,14 @@ parser = argparse.ArgumentParser(
                     usage='%(prog)s [options]',
                     formatter_class=CustomHelpFormatter)
 parser.add_argument("--rload", type=float, default=8, help="Load resistor in ohm")
-parser.add_argument("--vrange", type=float, default=61, help="ADC voltage range in volt")
+parser.add_argument("--vrange", type=float, default=100, help="ADC voltage range in volt")
 parser.add_argument("--thd", type=int, default=3, help="Number of harmonics for THD calculation")
 parser.add_argument("--dev", type=int, default=4, help="Id of sound device")
 parser.add_argument("--srate", type=int, default=192000, help="Sample rate")
 parser.add_argument("--chunk", type=int, default=65536, help="Chunk size")
 parser.add_argument("--ch", type=int, default=0, help="Selected channel")
 parser.add_argument("--res", type=int, default=32, help="ADC resolution")
-parser.add_argument("--duration", type=int, default=5, help="time to exit")
+parser.add_argument("--duration", type=int, default=10, help="time to exit")
 parser.add_argument("--mono", action='store_true')
 parser.add_argument("--list", action='store_true')
 args = parser.parse_args()
@@ -200,8 +200,10 @@ if args.list:
     list_sound_devices(audio)
     quit()
 
+skip=1024
+
 # create pyaudio stream
-stream = audio.open(format = iform,rate = samp_rate,channels = chnum, input_device_index = dev_index,input = True, frames_per_buffer=chunk)
+stream = audio.open(format = iform,rate = samp_rate,channels = chnum, input_device_index = dev_index,input = True, frames_per_buffer=chunk+skip)
 
 fig, (skip0, ax1, skip1, ax2, skip2) = plt.subplots(5,1,figsize=(16,9), gridspec_kw={'height_ratios': [.1, 2, .01, 6, .2]})
 fig.suptitle('Yet another Audio analyseR')
@@ -225,11 +227,12 @@ try:
 
         # record data chunk 
         stream.start_stream()
-        data = stream.read(chunk, exception_on_overflow=False)
+        data = stream.read(chunk + skip, exception_on_overflow=False)
         stream.stop_stream()
-        meas = np.frombuffer(data, dtype=dtype) * (Vrange / adc_res)
+        meas = np.frombuffer(data, dtype=dtype)[skip*chnum:]
         if chnum > 1:
             meas = meas[chsel::2]
+        meas = meas * (Vrange / adc_res)
 
         if len(meas) < 16:
             quit()
@@ -251,10 +254,10 @@ try:
         w = w[:N]
 
         # time domain calculations
-        peakV = np.max(meas) - np.min(meas)
-        peakW = np.max(np.square(meas)) / Rload
-        rmsV = rms(meas)
-        rmsW = rmsV**2 / Rload
+        Vpp = np.max(meas) - np.min(meas)
+        Ppeak = np.max(np.square(meas)) / Rload
+        Vrms = rms(meas)
+        Prms = Vrms**2 / Rload
 
         # freq domain calculations
         w2 = np.square(w)
@@ -281,11 +284,11 @@ try:
         if (len(cf) > 0):
             t0 = plt.text(0.5, .1, "Base: %5.1fHz" % cf[0], transform=fig.dpi_scale_trans, fontfamily='monospace')
 
-        t1 = plt.text(2.5, .3, "  Peak: %5.1fV" % peakV, transform=fig.dpi_scale_trans,  fontfamily='monospace')
-        t2 = plt.text(2.5, .1, "Pk Pwr: %5.1fW" % peakW, transform=fig.dpi_scale_trans,  fontfamily='monospace')
+        t1 = plt.text(2.5, .3, "   Vpp: %5.1fV" % Vpp, transform=fig.dpi_scale_trans,  fontfamily='monospace')
+        t2 = plt.text(2.5, .1, " Ppeak: %5.1fW" % Ppeak, transform=fig.dpi_scale_trans,  fontfamily='monospace')
 
-        t3 = plt.text(4.5, .3, "  Eff: %5.1fV" % rmsV, transform=fig.dpi_scale_trans, fontfamily='monospace')
-        t4 = plt.text(4.5, .1, "E Pwr: %5.1fW" % rmsW, transform=fig.dpi_scale_trans, fontfamily='monospace')
+        t3 = plt.text(4.5, .3, "  Eff: %5.1fV" % Vrms, transform=fig.dpi_scale_trans, fontfamily='monospace')
+        t4 = plt.text(4.5, .1, "E Pwr: %5.1fW" % Prms, transform=fig.dpi_scale_trans, fontfamily='monospace')
 
         t5 = plt.text(6.5, .5,  "Range: %3.1fV" % Vrange, transform=fig.dpi_scale_trans, fontfamily='monospace')
         t6 = plt.text(6.5, .3,  " Load: %3.1fohm" % Rload, transform=fig.dpi_scale_trans, fontfamily='monospace') 
