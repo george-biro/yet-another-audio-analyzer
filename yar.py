@@ -71,7 +71,7 @@ def thd(cw2):
     if (len(cw2) < 2) or (cw2[0] < 1e-6):
         return float('nan'), float('nan')
 
-    rh = (np.sum(cw2) - cw2[0]) / (len(cw2) - 1)
+    rh = (np.sum(cw2) - cw2[0]) 
     if (rh < 1e-100):
         return float('nan'), float('nan')
     k = (rh / cw2[0])**0.5
@@ -164,7 +164,7 @@ parser.add_argument("--freq", type=int, default=192000, help="Sample rate")
 parser.add_argument("--dev", type=int, default=4, help="Id of sound device")
 parser.add_argument("--chsel", type=int, default=1, help="Selected channel")
 parser.add_argument("--chnum", type=int, default=2, help="Number of channels")
-parser.add_argument("--chunk", type=int, default=65536, help="FFT size")
+parser.add_argument("--chunk", type=int, default=32768, help="FFT size")
 parser.add_argument("--skip", type=int, default="1024", help="Skip samples")
 parser.add_argument("--adcrng", type=float, default=6, help="ADC voltage range")
 parser.add_argument("--adcres", type=int, default=24, help="ADC resolution")
@@ -180,6 +180,7 @@ parser.add_argument("--csv", type=str, default="", help="print to csv")
 parser.add_argument("--comment", type=str, default="", help="csv comment")
 parser.add_argument("--ifreqA", type=float, default="0", help="intermodulation freq A")
 parser.add_argument("--ifreqB", type=float, default="0", help="intermodulation freq B")
+parser.add_argument("--window", type=str, default="hanning", help="filtering window")
 args = parser.parse_args()
 
 Rload = args.rload
@@ -247,7 +248,10 @@ tmax = chunk / sRate * 1000.0
 Trange = min(tmax, args.trange) 
 ts = np.linspace(0, tmax, chunk) 
 
-win = np.hanning(chunk)
+if args.window == "hanning":
+    win = np.hanning(chunk)
+else:
+    win = np.ones(chunk)
 
 csvfile = args.csv 
 
@@ -313,7 +317,7 @@ for xx in range(0, duration):
     ax2.set_ylabel('Amplitude (dB)')
     ax2.set_xlim([FrangeLow, Frange])
     ax2.set_xscale("log")
-    ax2.set_ylim([Wrange, 0])
+    ax2.set_ylim([Wrange, 20])
     ax2.plot(flist, 20*np.log10(w / N), 'b-')
     if (len(cf) != len(cw)):
          ax2.scatter(cf, 20*np.log10(cw / N), 'r')
