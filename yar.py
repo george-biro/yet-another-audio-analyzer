@@ -48,7 +48,7 @@ def dbPow(k):
     return 10.*math.log10(k)
 
 def carrier(w,w2,f,h):
-    ci = np.argmax(w)
+    ci = np.argmax(w) 
     cf = np.array([f[ci]])
     cw = np.array([w[ci]])
     cw2 = np.array([w2[ci]])
@@ -71,7 +71,7 @@ def thd(cw2):
     if (len(cw2) < 2) or (cw2[0] < 1e-6):
         return float('nan'), float('nan')
 
-    rh = ((np.sum(cw2) - cw2[0]) / (len(cw2) - 1))
+    rh = (np.sum(cw2) - cw2[0])
     if (rh < 1e-100):
         return float('nan'), float('nan')
     k = (rh / cw2[0])**0.5
@@ -83,7 +83,7 @@ def thdn(w2,cw2):
         return float('nan'), float('nan')
     
     # all harmonics except DC
-    sn = (np.sum(w2) - w2[0] - cw2[0]) / (len(w2) - 2)
+    sn = (np.sum(w2) - cw2[0])
     if (sn < 1e-100):
         return float('nan'), float('nan')
 
@@ -95,7 +95,7 @@ def snr(w2, cw2):
         return float('nan')
 
     sig = np.sum(cw2)
-    ns = (np.sum(w2) - w2[0] - sig) / (len(w2) - 1 - len(cw2));
+    ns = (np.sum(w2) - w2[0] - sig);
     if (ns < 0):
         return float('nan')
 
@@ -125,6 +125,26 @@ def imd(w2, a, b):
 def checkImd(iifreq):
     return ((iifreq[0] != iifreq[1]) and (iifreq[0] != 0) and (iifreq[1] != 0))
 
+def argAdc(args):
+    if (args.adcres == 16):
+        iform = pyaudio.paInt16 # 16-bit resolution
+        dtype = np.int16
+        adcRes = 2**15
+    elif (args.adcres == 24):
+        iform = pyaudio.paInt32 # 32-bit resolution
+        dtype = np.int32
+        adcRes = 2**24
+    elif (args.adcres == 32):
+        iform = pyaudio.paInt32 # 32-bit resolution
+        dtype = np.int32
+        adcRes = 2**31
+    else:
+        print("Invalid ADC resolution!")
+        quit()
+    return iform, dtype, adcRes
+
+def argFFTsize(x):
+    return round(x / 2) * 2
 
 
 class CustomHelpFormatter(argparse.HelpFormatter):
@@ -139,75 +159,63 @@ parser = argparse.ArgumentParser(
                     prog='Yet another Audio analisator',
                     usage='%(prog)s [options]',
                     formatter_class=CustomHelpFormatter)
-parser.add_argument("--rload", type=float, default=8, help="Load resistor in ohm")
-parser.add_argument("--vrange", type=float, default=10, help="Display voltage range")
-parser.add_argument("--adcRng", type=float, default=100, help="ADC voltage range")
-parser.add_argument("--thd", type=int, default=3, help="Number of harmonics for THD calculation")
-parser.add_argument("--dev", type=int, default=4, help="Id of sound device")
-parser.add_argument("--srate", type=int, default=192000, help="Sample rate")
-parser.add_argument("--chunk", type=int, default=65536, help="Chunk size")
-parser.add_argument("--ch", type=int, default=0, help="Selected channel")
-parser.add_argument("--res", type=int, default=32, help="ADC resolution")
-parser.add_argument("--duration", type=int, default=10, help="time to exit")
-parser.add_argument("--mono", action='store_true')
 parser.add_argument("--list", action='store_true')
+parser.add_argument("--freq", type=int, default=192000, help="Sample rate")
+parser.add_argument("--dev", type=int, default=4, help="Id of sound device")
+parser.add_argument("--chsel", type=int, default=1, help="Selected channel")
+parser.add_argument("--chnum", type=int, default=2, help="Number of channels")
+parser.add_argument("--chunk", type=int, default=65536, help="FFT size")
+parser.add_argument("--skip", type=int, default="1024", help="Skip samples")
+parser.add_argument("--adcrng", type=float, default=6, help="ADC voltage range")
+parser.add_argument("--adcres", type=int, default=24, help="ADC resolution")
+parser.add_argument("--vrange", type=float, default=6, help="Display voltage range")
+parser.add_argument("--frange", type=float, default="20000", help="displayed frequency range")
+parser.add_argument("--trange", type=float, default="10000", help="displayed time range")
+parser.add_argument("--wrange", type=float, default="-150", help="FFT range in dB")
+parser.add_argument("--rload", type=float, default=8, help="Load resistor in ohm")
+parser.add_argument("--thd", type=int, default=3, help="Number of harmonics for THD calculation")
+parser.add_argument("--duration", type=int, default=10, help="time to exit")
 parser.add_argument("--save", type=str, default="", help="export to file")
 parser.add_argument("--csv", type=str, default="", help="print to csv")
 parser.add_argument("--comment", type=str, default="", help="csv comment")
 parser.add_argument("--ifreqA", type=float, default="0", help="intermodulation freq A")
 parser.add_argument("--ifreqB", type=float, default="0", help="intermodulation freq B")
-parser.add_argument("--frange", type=float, default="20000", help="displayed frequency range")
-parser.add_argument("--trange", type=float, default="10", help="displayed time range")
-parser.add_argument("--wrange", type=float, default="-150", help="FFT range in dB")
-parser.add_argument("--skip", type=int, default="1024", help="skip chunk")
 args = parser.parse_args()
 
 Rload = args.rload
 Vrange = args.vrange   
 Frange = args.frange
-Trange = args.trange
 Wrange = args.wrange
-adcRng = args.adcRng    # voltage range of ADC
+adcRng = args.adcrng    # voltage range of ADC
 thdNum = args.thd       # number of harmonics to be checked
 skip = args.skip
 ifreq = [ args.ifreqA, args.ifreqB ]    # intermodulation test frequencies
 #ifreq = [ 0, 0 ]
 
-if (args.res == 16):
-    iform = pyaudio.paInt16 # 16-bit resolution
-    dtype = np.int16
-    adcRes = 2**15
-elif (args.res == 32):
-    iform = pyaudio.paInt32 # 32-bit resolution
-    dtype = np.int32
-    adcRes = 2**31
-else:
-    print("Invalid ADC resolution!")
-    quit()
+iform, dtype, adcRes = argAdc(args)
 
 
-#iform = pyaudio.paInt24 # 16-bit resolution
-#dtype = np.int24
-chSel = args.ch       # 1 channel
-chunk = args.chunk      # FFT window size 
-samp_rate = args.srate  # sampling rate
-duration = max(1, round(args.duration * samp_rate / chunk))
+def argsMono(x):
+    if x:
+        print("MONO mode!")
+        return 1
+    return 2
+
+
+chSel = args.chsel      
+chNum = args.chnum
+chunk = argFFTsize(args.chunk)      # FFT window size 
+sRate = args.freq  # sampling rate
+duration = max(1, round(args.duration * sRate / chunk))
 dev_index = args.dev    # device index found (see printout)
-if args.mono:
-    print("MONO mode!")
-    chnum = 1
-else:
-    chnum = 2
 
-
-# list_cards()
 audio = pyaudio.PyAudio()
 if args.list:
     list_sound_devices(audio)
     quit()
 
 # create pyaudio stream
-stream = audio.open(format = iform,rate = samp_rate,channels = chnum, input_device_index = dev_index,input = True, frames_per_buffer=chunk+skip)
+stream = audio.open(format = iform,rate = sRate,channels = chNum, input_device_index = dev_index,input = True, frames_per_buffer=chunk+skip)
 
 def on_press(event):
     quit()
@@ -226,12 +234,20 @@ skip0.axis("off")
 skip1.axis("off")
 skip2.axis("off")
 
-N = chunk // 2
-flist = abs(np.fft.fftfreq(chunk) * samp_rate)[:N]
+flist = abs(np.fft.rfftfreq(chunk) * sRate)
+N = len(flist)
+# audio range
+FrangeLow = 20
+iafreq = [ ifind(flist, FrangeLow), ifind(flist, Frange) ]
+flist = flist[iafreq[0]:iafreq[1]]
+
 iifreq = [ ifind(flist, ifreq[0]),  ifind(flist, ifreq[1]) ]
 
-tmax = chunk / samp_rate * 1000.0
+tmax = chunk / sRate * 1000.0
+Trange = min(tmax, args.trange) 
 ts = np.linspace(0, tmax, chunk) 
+
+win = np.hanning(chunk)
 
 csvfile = args.csv 
 
@@ -245,10 +261,13 @@ for xx in range(0, duration):
     stream.start_stream()
     data = stream.read(chunk + skip, exception_on_overflow=False)
     stream.stop_stream()
-    meas = np.frombuffer(data, dtype=dtype)[skip*chnum:]
-    if chnum > 1:
-        meas = meas[chSel::2]
-    meas = meas * (adcRng / adcRes)
+    measFull = np.frombuffer(data, dtype=dtype)[skip*chNum:]
+    if chNum > 1:
+        measRaw = measFull[chSel::2]
+    else:
+        measRaw = measFull
+    
+    meas = measRaw * win * (adcRng / adcRes) 
 
     if len(meas) < 16:
         quit()
@@ -257,13 +276,13 @@ for xx in range(0, duration):
     ax1.set_title('Time Domain', loc='left')
     ax1.set_xlabel('Time (ms)')
     ax1.set_ylabel('Amplitude (V)')
-    ax1.set_xlim([0, min(tmax, Trange)])
+    ax1.set_xlim([0, Trange])
     ax1.set_ylim([-Vrange, Vrange])
     ax1.plot(ts, meas, 'g')
     ax1.grid()
 
     # compute furie and the related freq values
-    w = (np.abs(np.fft.fft(meas))[:N]) * (0.5 / N)
+    w = np.abs(np.fft.rfft(meas))[iafreq[0]:iafreq[1]]
     if (len(w) != len(flist)):
         quit()
 
@@ -292,11 +311,12 @@ for xx in range(0, duration):
     ax2.set_title('Frequency Domain', loc='left')
     ax2.set_xlabel('Frequency (Hz)')
     ax2.set_ylabel('Amplitude (dB)')
-    ax2.set_xlim([0, Frange])
+    ax2.set_xlim([FrangeLow, Frange])
+    ax2.set_xscale("log")
     ax2.set_ylim([Wrange, 0])
-    ax2.plot(flist, 20*np.log10(w), 'b-')
+    ax2.plot(flist, 20*np.log10(w / N), 'b-')
     if (len(cf) != len(cw)):
-         ax2.scatter(cf, 20*np.log10(cw), 'r')
+         ax2.scatter(cf, 20*np.log10(cw / N), 'r')
     ax2.grid()
     if (len(cf) > 0):
          t0 = plt.text(0.5, .1, "Base: %5.1fHz" % cf[0], transform=fig.dpi_scale_trans, fontfamily='monospace')
@@ -310,10 +330,9 @@ for xx in range(0, duration):
     t5 = plt.text(6.5, .5,  "Range: %3.1fV" % Vrange, transform=fig.dpi_scale_trans, fontfamily='monospace')
     t6 = plt.text(6.5, .3,  " Load: %3.1fohm" % Rload, transform=fig.dpi_scale_trans, fontfamily='monospace') 
     t7 = plt.text(6.5, .1,  "Wsize: %5d#" % chunk, transform=fig.dpi_scale_trans, fontfamily='monospace') 
-    
 
     t8 = plt.text(11, .5, "THD(%02d): %5.1fdB (%6.3f%%)" % (thdNum, THD, THDP), transform=fig.dpi_scale_trans, fontfamily='monospace') 
-    t9 = plt.text(11, .3, "  THD-N: %5.1fdB" % (SINAD), transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t9 = plt.text(11, .3, "  THD-N: %5.1fdB (%6.3f%%)" % (SINAD, SINADP), transform=fig.dpi_scale_trans, fontfamily='monospace')
     t10 = plt.text(11, .1, "    SNR: %5.1fdB" % (SNR), transform=fig.dpi_scale_trans, fontfamily='monospace')
 
     if imdMode:
