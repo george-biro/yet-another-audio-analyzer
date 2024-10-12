@@ -47,21 +47,18 @@ def dbPow(k):
         return float('nan')
     return 10.*math.log10(k)
 
-def carrier(w,w2,f,h):
-    ci = np.argmax(w) 
-    cf = np.array([f[ci]])
-    cw = np.array([w[ci]])
-    cw2 = np.array([w2[ci]])
-    if (ci > 0):
-        i = 2 * ci
-        n = len(w)
-        while (i < n) and (h > 0):
-            cf = np.append(cf, f[i])
-            cw = np.append(cw, w[i])
-            cw2 = np.append(cw2, w2[i])
-            i = i + ci
-            h = h - 1
+def carrier(wskip, w,w2,f,h):
+    ci = np.argmax(w)
+    if ci < 1:
+        j = 1
+        k = 1
+    else:
+        j = ci + wskip
+        k = h
 
+    cf = (f[ci::j])[:k]
+    cw = (w[ci::j])[:k]
+    cw2 = (w2[ci::j])[:k]
     return cw,cw2,cf
 
 def rms(meas):
@@ -219,13 +216,15 @@ if args.list:
 stream = audio.open(format = iform,rate = sRate,channels = chNum, input_device_index = dev_index,input = True, frames_per_buffer=chunk+skip)
 
 def on_press(event):
+    print("on press")
     quit()
 
 def on_close(event):
+    print("on close")
     quit()
 
 fig, (skip0, ax1, skip1, ax2, skip2) = plt.subplots(5,1,figsize=(16,9), gridspec_kw={'height_ratios': [.1, 2, .01, 6, .2]})
-fig.canvas.mpl_connect('key_press_event', on_press)
+#fig.canvas.mpl_connect('key_press_event', on_press)
 fig.canvas.mpl_connect('close_event', on_close)
 
 fig.suptitle('Yet another Audio analyseR')
@@ -248,7 +247,13 @@ tmax = chunk / sRate * 1000.0
 Trange = min(tmax, args.trange) 
 ts = np.linspace(0, tmax, chunk) 
 
-if args.window == "hanning":
+if args.window == "bartlet":
+    win = np.bartlet(chunk)
+elif args.window == "blackman":
+    win = np.blackman(chunk)
+elif args.window == "hamming":
+    win = np.hamming(chunk)
+elif args.window == "hanning":
     win = np.hanning(chunk)
 else:
     win = np.ones(chunk)
@@ -270,10 +275,10 @@ for xx in range(0, duration):
         measRaw = measFull[chSel::2]
     else:
         measRaw = measFull
-    
     meas = measRaw * win * (adcRng / adcRes) 
 
     if len(meas) < 16:
+        print("len(meas) < 16")
         quit()
         
     ax1.cla()
@@ -288,8 +293,9 @@ for xx in range(0, duration):
     # compute furie and the related freq values
     w = np.abs(np.fft.rfft(meas))[iafreq[0]:iafreq[1]]
     if (len(w) != len(flist)):
+        print("len(w)%d != len(flist)%d" % (len(w), len(flist)))
         quit()
-
+    
     # time domain calculations
     Vpp = np.max(meas) - np.min(meas)
     Ppeak = np.max(np.square(meas)) / Rload
@@ -298,7 +304,12 @@ for xx in range(0, duration):
 
      # freq domain calculations
     w2 = np.square(w)
-    cw, cw2, cf = carrier(w, w2, flist, thdNum)
+    cw, cw2, cf = carrier(iafreq[0], w, w2, flist, thdNum)
+   
+#    print("--------------------------")
+#    print(cw)
+#    print(cf)
+
     THD, THDP = thd(cw2)
     SINAD, SINADP = thdn(w2,cw2)
     SNR = snr(w2, cw2)
