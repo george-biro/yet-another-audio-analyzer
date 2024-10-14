@@ -57,44 +57,55 @@ def carrier(wmagnitude, num):
         j = cinx 
         k = num
 
-    cmask = hmask = np.zeros(len(wmagnitude))
-    cmask[cinx] = 1
-    (hmask[cinx::j])[:k] = 1
-    hmask = hmask - cmask
-    return cinx, cmask, hmask
+    mfundamental = mharmonics = np.zeros(len(wmagnitude))
+    mfundamental[cinx] = 1
+    (mharmonics[cinx::j])[:k] = 1
+    mharmonics = mharmonics - mfundamental
+    return cinx, mfundamental, mharmonics
 
 def rms(meas):
     return (np.sum(np.square(meas)) / len(meas))**0.5
 
-def thd(wmagnitude, cmask, hmask):
+def thd_iec(wmagnitude, mharminics):
 
-    vcarrier = np.sum(np.square(wmagnitude * cmask))
-    vharmonic = np.sum(np.square(wmagnitude * hmask))
-
-    if (vcarrier < 1e-100):
+    vall = np.sum(np.square(wmagnitude))
+    vharmonics = np.sum(np.square(wmagnitude * mharmonics))
+    
+    if (vall < 1e-100):
         return float('nan'), float('nan')
     
-    k = (vharmonic / vcarrier)**0.5
+    k = (vharmonics / vall)**0.5
+    return dbRel(k), (100.*k)
+
+def thd_ieee(wmagnitude, mfundamental, mharmonics):
+
+    vfundamental = np.sum(np.square(wmagnitude * mfundamental))
+    vharmonics = np.sum(np.square(wmagnitude * mharmonics))
+
+    if (vfundamental < 1e-100):
+        return float('nan'), float('nan')
+    
+    k = (vharmonics / vfundamental)**0.5
     return dbRel(k), (100.*k)
 
 # same a sinad
-def thdn(wmagnitude, cmask):
+def thdn(wmagnitude, mfundamental):
 
-    vcarrier = np.sum(np.square(wmagnitude * cmask))
-    nmask = np.ones(len(cmask)) - cmask
-    vnoise = np.sum(np.square(wmagnitude * nmask))
+    vfundamental = np.sum(np.square(wmagnitude * mfundamental))
+    mnoise = np.ones(len(mfundamental)) - mfundamental
+    vnoise = np.sum(np.square(wmagnitude * mnoise))
 
-    if (vcarrier < 1e-100):
+    if (vfundamental < 1e-100):
         return float('nan'), float('nan')
 
-    k = (vnoise / vcarrier)**0.5
+    k = (vnoise / vfundamental)**0.5
     return dbRel(k), (100.*k)
 
-def snr(wmagnitue, hmask):
+def snr(wmagnitue, mharmonics):
     
-    vsignal = np.sum(np.square(wmagnitude * hmask))  
-    nmask = np.ones(len(hmask)) - hmask
-    vnoise = np.sum(np.square(wmagnitude * nmask))
+    vsignal = np.sum(np.square(wmagnitude * mharmonics))  
+    mnoise = np.ones(len(mharmonics)) - mharmonics
+    vnoise = np.sum(np.square(wmagnitude * mnoise))
 
     if (vnoise < 1e-100):
         return float('nan'), float('nan')
@@ -288,14 +299,14 @@ for xx in range(0, duration):
     Prms = Vrms**2 / Rload
 
      # freq domain calculations
-    cinx, mcarrier, mharmonics = carrier(wmagnitude, thdNum)
+    cinx, mfundamental, mharmonics = carrier(wmagnitude, thdNum)
    
 #    print("--------------------------")
 #    print(cw)
 #    print(cf)
 
-    THD, THDP = thd(wmagnitude, mcarrier, mharmonics)
-    SINAD, SINADP = thdn(wmagnitude, mcarrier)
+    THD, THDP = thd_ieee(wmagnitude, mfundamental, mharmonics)
+    SINAD, SINADP = thdn(wmagnitude, mharmonics)
     SNR = snr(wmagnitude, mharmonics)
 
 #    imdMode = checkImd(iifreq)
