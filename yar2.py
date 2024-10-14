@@ -48,7 +48,7 @@ def dbPow(k):
     return 10.*math.log10(k)
 
 # Determine carrier and harminics
-def carrier(wmagnitude, num):
+def carrier(wmagnitude, num, fmask):
     cinx = np.argmax(wmagnitude)
     if cinx < 1:
         j = 1
@@ -57,10 +57,13 @@ def carrier(wmagnitude, num):
         j = cinx 
         k = num
 
-    mfundamental = mharmonics = np.zeros(len(wmagnitude))
+    mfundamental = np.zeros(len(wmagnitude))
     mfundamental[cinx] = 1
+    mharmonics = np.zeros(len(wmagnitude))
     (mharmonics[cinx::j])[:k] = 1
     mharmonics = mharmonics - mfundamental
+    mfundamental = mfundamental * fmask
+    mharmonics = mharmonics * fmask
     return cinx, mfundamental, mharmonics
 
 def rms(meas):
@@ -70,7 +73,6 @@ def thd_iec(wmagnitude, mharminics):
 
     vall = np.sum(np.square(wmagnitude))
     vharmonics = np.sum(np.square(wmagnitude * mharmonics))
-    
     if (vall < 1e-100):
         return float('nan'), float('nan')
     
@@ -81,7 +83,6 @@ def thd_ieee(wmagnitude, mfundamental, mharmonics):
 
     vfundamental = np.sum(np.square(wmagnitude * mfundamental))
     vharmonics = np.sum(np.square(wmagnitude * mharmonics))
-
     if (vfundamental < 1e-100):
         return float('nan'), float('nan')
     
@@ -89,28 +90,29 @@ def thd_ieee(wmagnitude, mfundamental, mharmonics):
     return dbRel(k), (100.*k)
 
 # same a sinad
-def thdn(wmagnitude, mfundamental):
+def thdn(wmagnitude, mfundamental, fmask):
 
     vfundamental = np.sum(np.square(wmagnitude * mfundamental))
-    mnoise = np.ones(len(mfundamental)) - mfundamental
-    vnoise = np.sum(np.square(wmagnitude * mnoise))
+    mnoise = fmask - mfundamental
+    vnoise = np.sum(np.square(wmagnitude * mnoise)) 
 
     if (vfundamental < 1e-100):
         return float('nan'), float('nan')
 
-    k = (vnoise / vfundamental)**0.5
+    k = ((vnoise / vfundamental)**0.5) / np.sum(mnoise)
     return dbRel(k), (100.*k)
 
-def snr(wmagnitue, mharmonics):
+def snr(wmagnitue, mfundamental, mharmonics, fmask):
     
-    vsignal = np.sum(np.square(wmagnitude * mharmonics))  
-    mnoise = np.ones(len(mharmonics)) - mharmonics
+    msignal = mfundamental + mharmonics
+    vsignal = np.sum(np.square(wmagnitude * msignal))
+    mnoise = fmask - msignal
     vnoise = np.sum(np.square(wmagnitude * mnoise))
 
     if (vnoise < 1e-100):
         return float('nan'), float('nan')
 
-    k = (vsignal / vnoise)**0.5
+    k = ((vsignal / vnoise)**0.5) * len(mnoise)
     return dbRel(k)
 
 def enob(sinad):
@@ -235,7 +237,8 @@ flist = abs(np.fft.rfftfreq(chunk) * sRate)
 # Determine Audio Range
 FrangeLow = 20
 fmask = np.zeros(len(flist))
-fmask[ifind(flist, FrangeLow):ifind(flist, Frange)] = 1
+ilist = [ ifind(flist, FrangeLow), ifind(flist, Frange) ]
+fmask[ilist[0]:ilist[1]] = 1
 
 # Determin Time Range
 tmax = chunk / sRate * 1000.0
@@ -286,11 +289,10 @@ for xx in range(0, duration):
     ax1.grid()
 
     # compute furie and the related freq values
-    w = np.fft.rfft(meas) * fmask
-    if (len(w) != len(flist)):
-        print("len(w)%d != len(flist)%d" % (len(w), len(flist)))
+    wmagnitude = np.abs(np.fft.rfft(meas)) * fmask
+    if (len(wmagnitude) != len(flist)):
+        print("len(w)%d != len(flist)%d" % (len(wmagnitude), len(flist)))
         quit()
-    wmagnitude = np.abs(w)
     
     # time domain calculations
     Vpp = np.max(meas) - np.min(meas)
@@ -299,15 +301,16 @@ for xx in range(0, duration):
     Prms = Vrms**2 / Rload
 
      # freq domain calculations
-    cinx, mfundamental, mharmonics = carrier(wmagnitude, thdNum)
-   
-#    print("--------------------------")
-#    print(cw)
-#    print(cf)
+    cinx, mfundamental, mharmonics = carrier(wmagnitude, thdNum, fmask)
+    if (abs(np.sum(mfundamental) - 1) > .01):
+        quit()
+    if (np.sum(mharmonics) >= np.sum(fmask)):
+        quit()
 
     THD, THDP = thd_ieee(wmagnitude, mfundamental, mharmonics)
-    SINAD, SINADP = thdn(wmagnitude, mharmonics)
-    SNR = snr(wmagnitude, mharmonics)
+    SINAD, SINADP = thdn(wmagnitude, mfundamental, fmask)
+    SNR = snr(wmagnitude, mfundamental, mharmonics, fmask)
+    ENOB = enob(SNR)
 
 #    imdMode = checkImd(iifreq)
 #    if imdMode:
@@ -325,7 +328,7 @@ for xx in range(0, duration):
     ax2.set_xlim([FrangeLow, Frange])
     ax2.set_xscale("log")
     ax2.set_ylim([Wrange, 20])
-    ax2.plot(flist, 20*np.log10(wmagnitude / chunk), 'b-')
+    ax2.plot(flist[ilist[0]:ilist[1]], 20*np.log10(wmagnitude[ilist[0]:ilist[1]] / chunk), 'b-')
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
     ax2.grid()
     t0 = plt.text(0.5, .1, "Base: %5.1fHz" % flist[cinx], transform=fig.dpi_scale_trans, fontfamily='monospace')
@@ -342,7 +345,7 @@ for xx in range(0, duration):
 
     t8 = plt.text(11, .5, "THD(%02d): %5.1fdB (%6.3f%%)" % (thdNum, THD, THDP), transform=fig.dpi_scale_trans, fontfamily='monospace') 
     t9 = plt.text(11, .3, "  THD-N: %5.1fdB (%6.3f%%)" % (SINAD, SINADP), transform=fig.dpi_scale_trans, fontfamily='monospace')
-    t10 = plt.text(11, .1, "    SNR: %5.1fdB" % (SNR), transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t10 = plt.text(11, .1, "    SNR: %5.1fdB  ENOB %3.1f" % (SNR, ENOB), transform=fig.dpi_scale_trans, fontfamily='monospace')
 
 #    if imdMode:
 #        t11 = plt.text(9, .5, "IMD: %5.1fdB (%4.2f%%)" % (IMD, IMDP), transform=fig.dpi_scale_trans, fontfamily='monospace')
