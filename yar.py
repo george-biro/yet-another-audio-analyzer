@@ -235,7 +235,6 @@ skip1.axis("off")
 skip2.axis("off")
 
 flist = abs(np.fft.rfftfreq(chunk) * sRate)
-N = len(flist)
 # audio range
 FrangeLow = 20
 iafreq = [ ifind(flist, FrangeLow), ifind(flist, Frange) ]
@@ -329,9 +328,9 @@ for xx in range(0, duration):
     ax2.set_xlim([FrangeLow, Frange])
     ax2.set_xscale("log")
     ax2.set_ylim([Wrange, 20])
-    ax2.plot(flist, 20*np.log10(w / N), 'b-')
+    ax2.plot(flist, 20*np.log10(w / chunk), 'b-')
     if (len(cf) != len(cw)):
-         ax2.scatter(cf, 20*np.log10(cw / N), 'r')
+         ax2.scatter(cf, 20*np.log10(cw / chunk), 'r')
     ax2.grid()
     if (len(cf) > 0):
          t0 = plt.text(0.5, .1, "Base: %5.1fHz" % cf[0], transform=fig.dpi_scale_trans, fontfamily='monospace')
