@@ -346,7 +346,7 @@ for xx in range(0, duration):
     ax2.set_ylabel('Amplitude (dB)')
     ax2.set_xlim([FrangeLow, Frange])
     ax2.set_xscale("log")
-    ax2.set_ylim([Wrange, 20])
+    ax2.set_ylim([Wrange, 0])
     ax2.plot(flist[ilist[0]:ilist[1]], 20*np.log10(wmagnitude[ilist[0]:ilist[1]]), 'b-')
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
     ax2.grid()
