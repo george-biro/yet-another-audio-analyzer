@@ -260,8 +260,16 @@ csvfile = args.csv
 
 if (csvfile != "") and (not os.path.isfile(csvfile)):
     f = open(csvfile, 'w+')
-    f.write("Carrier,THD,THD DB,THD-N,THD-N DB,SNR,Vrms,Prms,Comment\n")
+    f.write("Carrier,THD,THD DB,THD-N,THD-N DB,SNR,ENOB,Vrms,Prms,Comment\n")
 
+if args.save != "":
+    picfile, picfile_ext = os.path.splitext(args.save)
+else:
+    picfile = ""
+    picfile_ext = ""
+
+pCInx = -1
+inxCnt = 0
 for xx in range(0, duration):
 
     # record data chunk 
@@ -316,9 +324,16 @@ for xx in range(0, duration):
 #    if imdMode:
 #        IMD, IMDP = imd(w2, iifreq[0], iifreq[1])
         
-    if (csvfile != ""):
+    if (pCInx == cinx):
+        inxCnt = inxCnt + 1
+    else:
+        inxCnt = 0
+
+    ffreq = flist[cinx]
+    pCInx = cinx
+    if ((inxCnt == 2) and (csvfile != "")):
         f = open(csvfile, "a")
-        f.write("%g,%g,%g,%g,%g,%g,%g,%g,%s\n" % (flist[cinx], THD, THDP, SINAD, SINADP, SNR, Vrms,Prms,args.comment))
+        f.write("%f,%f,%f,%f,%f,%f,%f,%f,%f,%s\n" % (ffreq, THD, THDP, SINAD, SINADP, SNR, ENOB, Vrms,Prms,args.comment))
 #displaying
     # manage axles
     ax2.cla()
@@ -331,7 +346,7 @@ for xx in range(0, duration):
     ax2.plot(flist[ilist[0]:ilist[1]], 20*np.log10(wmagnitude[ilist[0]:ilist[1]] / chunk), 'b-')
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
     ax2.grid()
-    t0 = plt.text(0.5, .1, "Base: %5.1fHz" % flist[cinx], transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t0 = plt.text(0.5, .1, "Base: %5.1fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
 
     t1 = plt.text(2.5, .3, "   Vpp: %5.1fV" % Vpp, transform=fig.dpi_scale_trans,  fontfamily='monospace')
     t2 = plt.text(2.5, .1, " Ppeak: %5.1fW" % Ppeak, transform=fig.dpi_scale_trans,  fontfamily='monospace')
@@ -353,8 +368,8 @@ for xx in range(0, duration):
 #        t13 = plt.text(9, .1, " F2: %5.1fHz" % flist[iifreq[1]], transform=fig.dpi_scale_trans, fontfamily='monospace')
     
     plt.pause(.01)
-    if args.save != "":
-        plt.savefig(args.save)
+    if ((inxCnt == 2) and (picfile != "")):
+        plt.savefig("%s_%.0fHz%s" % (picfile, ffreq, picfile_ext))
 
     #if (len(cf) > 0):
     t0.remove()
