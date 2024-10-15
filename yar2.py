@@ -94,25 +94,24 @@ def thdn(wmagnitude, mfundamental, fmask):
 
     vfundamental = np.sum(np.square(wmagnitude * mfundamental))
     mnoise = fmask - mfundamental
-    vnoise = np.sum(np.square(wmagnitude * mnoise)) / len(mnoise) 
+    vnoise = np.sum(np.square(wmagnitude * mnoise))  
 
     if (vfundamental < 1e-100):
         return float('nan'), float('nan')
 
-    k = ((vnoise / vfundamental)**0.5)
+    k = ((vnoise / vfundamental)**0.5) / np.sum(mnoise)
     return dbRel(k), (100.*k)
 
 def snr(wmagnitue, mfundamental, mharmonics, fmask):
     
-    msignal = mfundamental + mharmonics
-    vsignal = np.sum(np.square(wmagnitude * msignal))
-    mnoise = fmask - msignal
-    vnoise = np.sum(np.square(wmagnitude * mnoise)) / len(mnoise)
+    vsignal = np.sum(np.square(wmagnitude * mfundamental))
+    mnoise = fmask - mfundamental - mharmonics
+    vnoise = np.sum(np.square(wmagnitude * mnoise))
 
     if (vnoise < 1e-100):
         return float('nan'), float('nan')
 
-    k = ((vsignal / vnoise)**0.5) 
+    k = ((vsignal / vnoise)**0.5) * np.sum(mnoise) 
     return dbRel(k)
 
 def enob(sinad):
@@ -301,10 +300,6 @@ for xx in range(0, duration):
     if (len(wmagnitude) != len(flist)):
         print("len(w)%d != len(flist)%d" % (len(wmagnitude), len(flist)))
         quit()
-    wmax = np.max(wmagnitude)
-    if (wmax > 1e-6):
-        wmagnitude = wmagnitude / wmax
-
     
     # time domain calculations
     Vpp = np.max(meas) - np.min(meas)
@@ -347,7 +342,11 @@ for xx in range(0, duration):
     ax2.set_xlim([FrangeLow, Frange])
     ax2.set_xscale("log")
     ax2.set_ylim([Wrange, 0])
-    ax2.plot(flist[ilist[0]:ilist[1]], 20*np.log10(wmagnitude[ilist[0]:ilist[1]]), 'b-')
+
+    wmax = np.max(wmagnitude)
+    if (wmax > 1e-6):
+        wuni = wmagnitude / wmax
+    ax2.plot(flist[ilist[0]:ilist[1]], 20*np.log10(wuni[ilist[0]:ilist[1]]), 'b-')
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
     ax2.grid()
     t0 = plt.text(0.5, .1, "Base: %5.1fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
