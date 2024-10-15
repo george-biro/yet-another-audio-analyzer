@@ -94,12 +94,12 @@ def thdn(wmagnitude, mfundamental, fmask):
 
     vfundamental = np.sum(np.square(wmagnitude * mfundamental))
     mnoise = fmask - mfundamental
-    vnoise = np.sum(np.square(wmagnitude * mnoise)) 
+    vnoise = np.sum(np.square(wmagnitude * mnoise)) / len(mnoise) 
 
     if (vfundamental < 1e-100):
         return float('nan'), float('nan')
 
-    k = ((vnoise / vfundamental)**0.5) / np.sum(mnoise)
+    k = ((vnoise / vfundamental)**0.5)
     return dbRel(k), (100.*k)
 
 def snr(wmagnitue, mfundamental, mharmonics, fmask):
@@ -107,12 +107,12 @@ def snr(wmagnitue, mfundamental, mharmonics, fmask):
     msignal = mfundamental + mharmonics
     vsignal = np.sum(np.square(wmagnitude * msignal))
     mnoise = fmask - msignal
-    vnoise = np.sum(np.square(wmagnitude * mnoise))
+    vnoise = np.sum(np.square(wmagnitude * mnoise)) / len(mnoise)
 
     if (vnoise < 1e-100):
         return float('nan'), float('nan')
 
-    k = ((vsignal / vnoise)**0.5) * len(mnoise)
+    k = ((vsignal / vnoise)**0.5) 
     return dbRel(k)
 
 def enob(sinad):
@@ -301,6 +301,10 @@ for xx in range(0, duration):
     if (len(wmagnitude) != len(flist)):
         print("len(w)%d != len(flist)%d" % (len(wmagnitude), len(flist)))
         quit()
+    wmax = np.max(wmagnitude)
+    if (wmax > 1e-6):
+        wmagnitude = wmagnitude / wmax
+
     
     # time domain calculations
     Vpp = np.max(meas) - np.min(meas)
@@ -343,7 +347,7 @@ for xx in range(0, duration):
     ax2.set_xlim([FrangeLow, Frange])
     ax2.set_xscale("log")
     ax2.set_ylim([Wrange, 20])
-    ax2.plot(flist[ilist[0]:ilist[1]], 20*np.log10(wmagnitude[ilist[0]:ilist[1]] / chunk), 'b-')
+    ax2.plot(flist[ilist[0]:ilist[1]], 20*np.log10(wmagnitude[ilist[0]:ilist[1]]), 'b-')
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
     ax2.grid()
     t0 = plt.text(0.5, .1, "Base: %5.1fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
