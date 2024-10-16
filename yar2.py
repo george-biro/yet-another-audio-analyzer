@@ -18,6 +18,13 @@
 # You should have received a copy of the GNU General Public License along 
 # with this program. If not, see <https://www.gnu.org/licenses/>. 
 #
+# For noise measurement:
+#
+# f_in = m / chunk * f_sampling, where m is prime number
+#
+# 373 / 65536 * 192000 = 1092.8Hz
+
+
 import math
 import matplotlib.pyplot as plt
 import numpy as np
@@ -99,8 +106,9 @@ def thdn(wmagnitude, mfundamental, fmask):
     if (vfundamental < 1e-100):
         return float('nan'), float('nan')
 
-    k = ((vnoise / vfundamental)**0.5) / np.sum(mnoise)
+    k = ((vnoise / vfundamental)**0.5)
     return dbRel(k), (100.*k)
+
 
 def snr(wmagnitue, mfundamental, mharmonics, fmask):
     
@@ -111,7 +119,34 @@ def snr(wmagnitue, mfundamental, mharmonics, fmask):
     if (vnoise < 1e-100):
         return float('nan'), float('nan')
 
-    k = ((vsignal / vnoise)**0.5) * np.sum(mnoise) 
+    k = ((vsignal / vnoise)**0.5) 
+    return dbRel(k)
+
+
+def thdn2(wcomplex, mfundamental, fmask):
+
+    vfundamental = np.sum(np.square(np.fft.irfft(wcomplex * mfundamental)))
+    mnsh = fmask - mfundamental
+    vnsh = np.sum(np.square(np.fft.irfft(wcomplex * mnsh)))  
+
+    if (vfundamental < 1e-100):
+        return float('nan'), float('nan')
+
+    k = ((vnsh / vfundamental)**0.5)
+    return dbRel(k), (100.*k)
+
+
+def snr2(wcomplex, mfundamental, mharmonics, fmask):
+    
+    msignal = mfundamental + mharmonics
+    vsignal = np.sum(np.square(np.fft.irfft(wcomplex * msignal)))
+    mnoise = fmask - msignal
+    vnoise = np.sum(np.square(np.fft.irfft(wcomplex * mnoise)))
+
+    if (vnoise < 1e-100):
+        return float('nan'), float('nan')
+
+    k = ((vsignal / vnoise)**0.5) 
     return dbRel(k)
 
 def enob(sinad):
@@ -296,7 +331,8 @@ for xx in range(0, duration):
     ax1.grid()
 
     # compute furie and the related freq values
-    wmagnitude = np.abs(np.fft.rfft(meas)) * fmask
+    wcomplex = np.fft.rfft(meas) * fmask
+    wmagnitude = np.abs(wcomplex)   
     if (len(wmagnitude) != len(flist)):
         print("len(w)%d != len(flist)%d" % (len(wmagnitude), len(flist)))
         quit()
@@ -315,8 +351,10 @@ for xx in range(0, duration):
         quit()
 
     THD, THDP = thd_ieee(wmagnitude, mfundamental, mharmonics)
-    SINAD, SINADP = thdn(wmagnitude, mfundamental, fmask)
-    SNR = snr(wmagnitude, mfundamental, mharmonics, fmask)
+#    SINAD, SINADP = thdn(wmagnitude, mfundamental, fmask)
+#    SNR = snr(wmagnitude, mfundamental, mharmonics, fmask)
+    SINAD, SINADP = thdn2(wcomplex, mfundamental, fmask)
+    SNR = snr2(wcomplex, mfundamental, mharmonics, fmask)
     ENOB = enob(SNR)
 
 #    imdMode = checkImd(iifreq)
