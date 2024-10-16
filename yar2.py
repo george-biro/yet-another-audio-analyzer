@@ -209,7 +209,7 @@ parser.add_argument("--wrange", type=float, default="-150", help="FFT range in d
 parser.add_argument("--rload", type=float, default=8, help="Load resistor in ohm")
 parser.add_argument("--thd", type=int, default=3, help="Number of harmonics for THD calculation")
 parser.add_argument("--duration", type=int, default=10, help="time to exit")
-parser.add_argument("--save", type=str, default="", help="export to file")
+parser.add_argument("--plot", type=str, default="", help="plot to file")
 parser.add_argument("--csv", type=str, default="", help="print to csv")
 parser.add_argument("--comment", type=str, default="", help="csv comment")
 parser.add_argument("--window", type=str, default="hanning", help="filtering window")
@@ -294,10 +294,10 @@ csvfile = args.csv
 
 if (csvfile != "") and (not os.path.isfile(csvfile)):
     f = open(csvfile, 'w+')
-    f.write("Carrier,THD,THD DB,THD-N,THD-N DB,SNR,ENOB,Vrms,Prms,Comment\n")
+    f.write("Carrier,THD,THD DB,THD-N,THD-N DB,SNR,ENOB,Vrms,Prms\n")
 
-if args.save != "":
-    picfile, picfile_ext = os.path.splitext(args.save)
+if args.plot != "":
+    picfile, picfile_ext = os.path.splitext(args.plot)
 else:
     picfile = ""
     picfile_ext = ""
@@ -370,7 +370,7 @@ for xx in range(0, duration):
     pCInx = cinx
     if ((inxCnt == 2) and (csvfile != "")):
         f = open(csvfile, "a")
-        f.write("%f,%f,%f,%f,%f,%f,%f,%f,%f,%s\n" % (ffreq, THD, THDP, SINAD, SINADP, SNR, ENOB, Vrms,Prms,args.comment))
+        f.write("%f,%f,%f,%f,%f,%f,%f,%f,%f\n" % (ffreq, THD, THDP, SINAD, SINADP, SNR, ENOB, Vrms, Prms))
 #displaying
     # manage axles
     ax2.cla()
