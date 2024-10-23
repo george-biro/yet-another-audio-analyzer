@@ -34,6 +34,7 @@ import time
 import sys
 import argparse
 import os.path
+import random
 
 def list_sound_devices(audio):
     host = 0
@@ -125,7 +126,7 @@ def thdn(wmagnitude, mfundamental, fmask):
     if (vfundamental < 1e-100):
         return float('nan'), float('nan')
 
-    k = ((vnoise / vfundamental / len(wmagnitude))**0.5)
+    k = (vnoise / vfundamental)**0.5
     return dbRel(k), (100.*k)
 
 
@@ -138,7 +139,7 @@ def snr(wmagnitue, mfundamental, mharmonics, fmask):
     if (vnoise < 1e-100):
         return float('nan'), float('nan')
 
-    k = ((vsignal / vnoise)**0.5) * len(wmagnitude)
+    k = (vsignal / vnoise)**0.5
     return dbRel(k)
 
 def thdn2(wcomplex, mfundamental, fmask):
@@ -146,7 +147,6 @@ def thdn2(wcomplex, mfundamental, fmask):
     vfundamental = np.sum(np.square(np.fft.irfft(wcomplex * mfundamental)))
     mnsh = fmask - mfundamental
     vnsh = np.sum(np.square(np.fft.irfft(wcomplex * mnsh)))  
-
 
     if (vfundamental < 1e-100):
         return float('nan'), float('nan')
@@ -224,14 +224,15 @@ parser.add_argument("--adcres", type=int, default=32, help="ADC resolution")
 parser.add_argument("--vrange", type=float, default=40, help="Display voltage range")
 parser.add_argument("--frange", type=float, default="40000", help="displayed frequency range")
 parser.add_argument("--trange", type=float, default="10000", help="displayed time range")
-parser.add_argument("--wrange", type=float, default="-200", help="FFT range in dB")
+parser.add_argument("--wrange", type=float, default="-150", help="FFT range in dB")
 parser.add_argument("--rload", type=float, default=8, help="Load resistor in ohm")
 parser.add_argument("--thd", type=int, default=3, help="Number of harmonics for THD calculation")
-parser.add_argument("--duration", type=int, default=10, help="time to exit")
+parser.add_argument("--duration", type=int, default=240, help="time to exit")
 parser.add_argument("--plot", type=str, default="", help="plot to file")
 parser.add_argument("--csv", type=str, default="", help="print to csv")
 parser.add_argument("--comment", type=str, default="", help="csv comment")
 parser.add_argument("--window", type=str, default="hanning", help="filtering window")
+parser.add_argument("--sim", type=float, default=0, help="Do sumilation with an exact frequency")
 args = parser.parse_args()
 
 Rload = args.rload
@@ -241,6 +242,7 @@ Wrange = args.wrange
 adcRng = args.adcrng    # voltage range of ADC
 thdNum = args.thd       # number of harmonics to be checked
 skip = args.skip
+simFreq = args.sim
 
 iform, dtype, adcRes = argAdc(args)
 
@@ -279,7 +281,10 @@ if args.list:
     quit()
 
 # create pyaudio stream
-stream = audio.open(format = iform,rate = sRate,channels = chNum, input_device_index = dev_index,input = True, frames_per_buffer=chunk+skip)
+if (dev_index >= 0) and (simFreq < .01):
+    stream = audio.open(format = iform,rate = sRate,channels = chNum, input_device_index = dev_index,input = True, frames_per_buffer=chunk+skip)
+else:
+    stream = None
 
 def on_press(event):
     print("on press")
@@ -346,16 +351,19 @@ pCInx = -1
 inxCnt = 0
 for xx in range(0, duration):
 
-    # record data chunk 
-    stream.start_stream()
-    data = stream.read(chunk + skip, exception_on_overflow=False)
-    stream.stop_stream()
-    measFull = np.frombuffer(data, dtype=dtype)[skip*chNum:]
-    if chNum > 1:
-        measRaw = measFull[chSel::2]
+    # record data chunk
+    if stream is None:
+        meas = np.sin(2 * np.pi * simFreq * ts / 1000 + random.random() * np.pi)* win
     else:
-        measRaw = measFull
-    meas = measRaw * win * (adcRng / adcRes) 
+        stream.start_stream()
+        data = stream.read(chunk + skip, exception_on_overflow=False)
+        stream.stop_stream()
+        measFull = np.frombuffer(data, dtype=dtype)[skip*chNum:]
+        if chNum > 1:
+            measRaw = measFull[chSel::2]
+        else:
+            measRaw = measFull
+        meas = measRaw * win * (adcRng / adcRes) 
 
     if len(meas) < 16:
         print("len(meas) < 16")
@@ -382,18 +390,24 @@ for xx in range(0, duration):
     if (np.sum(mharmonics) >= np.sum(fmask)):
         quit()
 
+    ffreq = flist[cinx]
     if (pCInx == cinx):
         inxCnt = inxCnt + 1
     else:
         inxCnt = 0
         wmagsum = np.zeros(len(flist))
         wmagdiv = 0
-   
-    pCInx = cinx
+        
+        mclean = np.sin(2 * np.pi * ffreq * ts / 1000) * win
+        wcc = np.fft.rfft(mclean) * fmask
+        wclean = cuni(np.abs(wcc) / len(wcc))
 
+
+    pCInx = cinx
     wmagsum = wmagsum + wmag1
     wmagdiv = wmagdiv + 1
-    wmagnitude = cuni(wmagsum / wmagdiv)
+    wmagnitude = cuni(wmagsum / wmagdiv) - wclean * (fmask - mfundamental) 
+    wmagnitude[wmagnitude < 0] = 0
 
     # time domain calculations
     Vpp = np.max(meas) - np.min(meas)
@@ -415,7 +429,6 @@ for xx in range(0, duration):
 #        IMD, IMDP = imd(w2, iifreq[0], iifreq[1])
         
 
-    ffreq = flist[cinx]
     if ((inxCnt == 2) and (csvfile != "")):
         f = open(csvfile, "a")
         f.write("%f,%f,%f,%f,%f,%f,%f,%f,%f\n" % (ffreq, THD, THDP, SINAD, SINADP, SNR, ENOB, Vrms, Prms))
@@ -431,9 +444,11 @@ for xx in range(0, duration):
     ax2.set_ylim([Wrange, 0])
 
     ax2.plot(flist[ilist[0]:ilist[1]], clog(wmagnitude[ilist[0]:ilist[1]]), 'b-')
+    ax2.plot(flist[ilist[0]:ilist[1]], clog(wclean[ilist[0]:ilist[1]]), 'g.')
+
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
     ax2.grid()
-    t0 = plt.text(0.5, .3, "Base : %5.1fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t0 = plt.text(0.5, .3, "Base : %10.5fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
   
 
     t7 = plt.text(0.5, .1, "Wsize: %5d#" % chunk, transform=fig.dpi_scale_trans, fontfamily='monospace') 
