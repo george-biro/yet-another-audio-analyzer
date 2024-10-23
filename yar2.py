@@ -43,6 +43,25 @@ def list_sound_devices(audio):
         if (audio.get_device_info_by_host_api_device_index(host, i).get('maxInputChannels')) > 0:
             print("Input Device id ", i, " - ", audio.get_device_info_by_host_api_device_index(host, i).get('name'))
 
+def isPrime(n):
+    for i in range(2, int(n**0.5) + 1):
+        if (n % i == 0):
+            return True
+            
+    return False
+
+def findPrime(n):
+    for i in range(n-1,0,-1):
+        if isPrime(i):
+            plow = i
+            break
+
+    for i in range(n+1, n+100):
+        if isPrime(i):
+            phigh = i
+            break
+
+    return plow, phigh
 
 def dbRel(k):
     if (k <= 0):
@@ -101,12 +120,12 @@ def thdn(wmagnitude, mfundamental, fmask):
 
     vfundamental = np.sum(np.square(wmagnitude * mfundamental))
     mnoise = fmask - mfundamental
-    vnoise = np.sum(np.square(wmagnitude * mnoise))  
-
+    vnoise = np.sum(np.square(wmagnitude * mnoise)) 
+    
     if (vfundamental < 1e-100):
         return float('nan'), float('nan')
 
-    k = ((vnoise / vfundamental)**0.5)
+    k = ((vnoise / vfundamental / len(wmagnitude))**0.5)
     return dbRel(k), (100.*k)
 
 
@@ -119,9 +138,8 @@ def snr(wmagnitue, mfundamental, mharmonics, fmask):
     if (vnoise < 1e-100):
         return float('nan'), float('nan')
 
-    k = ((vsignal / vnoise)**0.5) 
+    k = ((vsignal / vnoise)**0.5) * len(wmagnitude)
     return dbRel(k)
-
 
 def thdn2(wcomplex, mfundamental, fmask):
 
@@ -129,9 +147,11 @@ def thdn2(wcomplex, mfundamental, fmask):
     mnsh = fmask - mfundamental
     vnsh = np.sum(np.square(np.fft.irfft(wcomplex * mnsh)))  
 
+
     if (vfundamental < 1e-100):
         return float('nan'), float('nan')
-
+    print(vfundamental) 
+    print("vfund %f vnoise %f" % (vfundamental, vnsh))
     k = ((vnsh / vfundamental)**0.5)
     return dbRel(k), (100.*k)
 
@@ -204,7 +224,7 @@ parser.add_argument("--adcres", type=int, default=32, help="ADC resolution")
 parser.add_argument("--vrange", type=float, default=40, help="Display voltage range")
 parser.add_argument("--frange", type=float, default="40000", help="displayed frequency range")
 parser.add_argument("--trange", type=float, default="10000", help="displayed time range")
-parser.add_argument("--wrange", type=float, default="-150", help="FFT range in dB")
+parser.add_argument("--wrange", type=float, default="-200", help="FFT range in dB")
 parser.add_argument("--rload", type=float, default=8, help="Load resistor in ohm")
 parser.add_argument("--thd", type=int, default=3, help="Number of harmonics for THD calculation")
 parser.add_argument("--duration", type=int, default=10, help="time to exit")
@@ -224,15 +244,18 @@ skip = args.skip
 
 iform, dtype, adcRes = argAdc(args)
 
-def clog(wmagnitude):
-
+def cuni(wmagnitude):
     wmax = np.max(wmagnitude)
     if (wmax > 1e-6):
         wuni = wmagnitude / wmax
     else:
         wuni = wmagnitude
-    wuni[wuni < 1e-6] = 1e-6
 
+    return wuni
+
+def clog(wuni2):
+    wuni = wuni2
+    wuni[wuni < 1e-10] = 1e-10
     return 20*np.log10(wuni)
 
 
@@ -283,6 +306,8 @@ FrangeLow = 20
 fmask = np.zeros(len(flist))
 ilist = [ ifind(flist, FrangeLow), ifind(flist, Frange) ]
 fmask[ilist[0]:ilist[1]] = 1
+wmagsum = np.zeros(len(flist))
+wmagdiv = 0
 
 # Determin Time Range
 tmax = chunk / sRate * 1000.0
@@ -291,14 +316,19 @@ ts = np.linspace(0, tmax, chunk)
 
 if args.window == "bartlet":
     win = np.bartlet(chunk)
+    npb = 2
 elif args.window == "blackman":
     win = np.blackman(chunk)
+    npb = 1.73  # 2 ?
 elif args.window == "hamming":
     win = np.hamming(chunk)
+    npb = 1.36
 elif args.window == "hanning":
     win = np.hanning(chunk)
+    npb = 1.5
 else:
     win = np.ones(chunk)
+    npb = 1
 
 csvfile = args.csv 
 
@@ -342,10 +372,28 @@ for xx in range(0, duration):
 
     # compute furie and the related freq values
     wcomplex = np.fft.rfft(meas) * fmask
-    wmagnitude = np.abs(wcomplex)   
-    if (len(wmagnitude) != len(flist)):
-        print("len(w)%d != len(flist)%d" % (len(wmagnitude), len(flist)))
+    wmag1 = np.abs(wcomplex) / len(wcomplex)
+    if (len(wmag1) != len(flist)):
+        print("len(w)%d != len(flist)%d" % (len(wmag1), len(flist)))
         quit()
+    cinx, mfundamental, mharmonics = carrier(wmag1, thdNum, fmask)
+    if (abs(np.sum(mfundamental) - 1) > .01):
+        quit()
+    if (np.sum(mharmonics) >= np.sum(fmask)):
+        quit()
+
+    if (pCInx == cinx):
+        inxCnt = inxCnt + 1
+    else:
+        inxCnt = 0
+        wmagsum = np.zeros(len(flist))
+        wmagdiv = 0
+   
+    pCInx = cinx
+
+    wmagsum = wmagsum + wmag1
+    wmagdiv = wmagdiv + 1
+    wmagnitude = cuni(wmagsum / wmagdiv)
 
     # time domain calculations
     Vpp = np.max(meas) - np.min(meas)
@@ -354,30 +402,20 @@ for xx in range(0, duration):
     Prms = Vrms**2 / Rload
 
      # freq domain calculations
-    cinx, mfundamental, mharmonics = carrier(wmagnitude, thdNum, fmask)
-    if (abs(np.sum(mfundamental) - 1) > .01):
-        quit()
-    if (np.sum(mharmonics) >= np.sum(fmask)):
-        quit()
 
     THD, THDP = thd_ieee(wmagnitude, mfundamental, mharmonics)
-#    SINAD, SINADP = thdn(wmagnitude, mfundamental, fmask)
-#    SNR = snr(wmagnitude, mfundamental, mharmonics, fmask)
-    SINAD, SINADP = thdn2(wcomplex, mfundamental, fmask)
-    SNR = snr2(wcomplex, mfundamental, mharmonics, fmask)
+    SINAD, SINADP = thdn(wmagnitude, mfundamental, fmask)
+    SNR = snr(wmagnitude, mfundamental, mharmonics, fmask)
+#    SINAD, SINADP = thdn2(wcomplex, mfundamental, fmask)
+#    SNR = snr2(wcomplex, mfundamental, mharmonics, fmask)
     ENOB = enob(SNR)
 
 #    imdMode = checkImd(iifreq)
 #    if imdMode:
 #        IMD, IMDP = imd(w2, iifreq[0], iifreq[1])
         
-    if (pCInx == cinx):
-        inxCnt = inxCnt + 1
-    else:
-        inxCnt = 0
 
     ffreq = flist[cinx]
-    pCInx = cinx
     if ((inxCnt == 2) and (csvfile != "")):
         f = open(csvfile, "a")
         f.write("%f,%f,%f,%f,%f,%f,%f,%f,%f\n" % (ffreq, THD, THDP, SINAD, SINADP, SNR, ENOB, Vrms, Prms))
@@ -388,6 +426,7 @@ for xx in range(0, duration):
     ax2.set_xlabel('Frequency (Hz)')
     ax2.set_ylabel('Amplitude (dB)')
     ax2.set_xlim([FrangeLow, Frange])
+    
     ax2.set_xscale("log")
     ax2.set_ylim([Wrange, 0])
 
@@ -395,6 +434,8 @@ for xx in range(0, duration):
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
     ax2.grid()
     t0 = plt.text(0.5, .3, "Base : %5.1fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
+  
+
     t7 = plt.text(0.5, .1, "Wsize: %5d#" % chunk, transform=fig.dpi_scale_trans, fontfamily='monospace') 
 
     t1 = plt.text(2.5, .3, "   Vpp: %5.1fV" % Vpp, transform=fig.dpi_scale_trans,  fontfamily='monospace')
@@ -409,6 +450,17 @@ for xx in range(0, duration):
     t8 = plt.text(8.5, .3, "THD(%02d): %5.1fdB (%6.3f%%)" % (thdNum, THD, THDP), transform=fig.dpi_scale_trans, fontfamily='monospace') 
     t9 = plt.text(8.5, .1, "  THD-N: %5.1fdB (%6.3f%%)" % (SINAD, SINADP), transform=fig.dpi_scale_trans, fontfamily='monospace')
     t10 = plt.text(11.5, .1, "    SNR: %5.1fdB  ENOB %3.1f" % (SNR, ENOB), transform=fig.dpi_scale_trans, fontfamily='monospace')
+    
+    t11 = plt.text(11.5, .3, "   Rate: %5.0fHz" % (sRate), transform=fig.dpi_scale_trans, fontfamily='monospace')
+
+    mul = int(sRate / ffreq + .5)
+    if isPrime(mul):
+        t12 = plt.text(0.5, .5, "Freq OK", transform=fig.dpi_scale_trans, fontfamily='monospace')
+    else:
+        pl, ph = findPrime(mul)
+        fl = ffreq * float(pl) / float(mul)
+        fh = ffreq * float(ph) / float(mul)
+        t12 = plt.text(0.5, .5, "(%5.1fHz or %5.1fHz)" % (fl, fh), transform=fig.dpi_scale_trans, fontfamily='monospace')
 
 #    if imdMode:
 #        t11 = plt.text(9, .5, "IMD: %5.1fdB (%4.2f%%)" % (IMD, IMDP), transform=fig.dpi_scale_trans, fontfamily='monospace')
@@ -431,7 +483,8 @@ for xx in range(0, duration):
     t8.remove()
     t9.remove()
     t10.remove()
-
+    t11.remove()
+    t12.remove()
 #    if imdMode:
 #        t11.remove()
 #        t12.remove()
