@@ -135,7 +135,6 @@ def thdn2(wcomplex, mfundamental, fmask):
     k = ((vnsh / vfundamental)**0.5)
     return dbRel(k), (100.*k)
 
-
 def snr2(wcomplex, mfundamental, mharmonics, fmask):
     
     msignal = mfundamental + mharmonics
@@ -225,6 +224,17 @@ skip = args.skip
 
 iform, dtype, adcRes = argAdc(args)
 
+def clog(wmagnitude):
+
+    wmax = np.max(wmagnitude)
+    if (wmax > 1e-6):
+        wuni = wmagnitude / wmax
+    else:
+        wuni = wmagnitude
+    wuni[wuni < 1e-6] = 1e-6
+
+    return 20*np.log10(wuni)
+
 
 def argsMono(x):
     if x:
@@ -256,7 +266,7 @@ def on_close(event):
     print("on close")
     quit()
 
-fig, (skip0, ax1, skip1, ax2, skip2) = plt.subplots(5,1,figsize=(16,9), gridspec_kw={'height_ratios': [.1, 2, .01, 6, .2]})
+fig, (skip0, ax1, skip1, ax2, skip2) = plt.subplots(5,1,figsize=(16,9), gridspec_kw={'height_ratios': [.1, 2, .01, 6, .3]})
 #fig.canvas.mpl_connect('key_press_event', on_press)
 fig.canvas.mpl_connect('close_event', on_close)
 
@@ -336,7 +346,7 @@ for xx in range(0, duration):
     if (len(wmagnitude) != len(flist)):
         print("len(w)%d != len(flist)%d" % (len(wmagnitude), len(flist)))
         quit()
-    
+
     # time domain calculations
     Vpp = np.max(meas) - np.min(meas)
     Ppeak = np.max(np.square(meas)) / Rload
@@ -381,13 +391,11 @@ for xx in range(0, duration):
     ax2.set_xscale("log")
     ax2.set_ylim([Wrange, 0])
 
-    wmax = np.max(wmagnitude)
-    if (wmax > 1e-6):
-        wuni = wmagnitude / wmax
-    ax2.plot(flist[ilist[0]:ilist[1]], 20*np.log10(wuni[ilist[0]:ilist[1]]), 'b-')
+    ax2.plot(flist[ilist[0]:ilist[1]], clog(wmagnitude[ilist[0]:ilist[1]]), 'b-')
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
     ax2.grid()
-    t0 = plt.text(0.5, .1, "Base: %5.1fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t0 = plt.text(0.5, .3, "Base : %5.1fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t7 = plt.text(0.5, .1, "Wsize: %5d#" % chunk, transform=fig.dpi_scale_trans, fontfamily='monospace') 
 
     t1 = plt.text(2.5, .3, "   Vpp: %5.1fV" % Vpp, transform=fig.dpi_scale_trans,  fontfamily='monospace')
     t2 = plt.text(2.5, .1, " Ppeak: %5.1fW" % Ppeak, transform=fig.dpi_scale_trans,  fontfamily='monospace')
@@ -395,13 +403,12 @@ for xx in range(0, duration):
     t3 = plt.text(4.5, .3, "  Eff: %5.1fV" % Vrms, transform=fig.dpi_scale_trans, fontfamily='monospace')
     t4 = plt.text(4.5, .1, "E Pwr: %5.1fW" % Prms, transform=fig.dpi_scale_trans, fontfamily='monospace')
 
-    t5 = plt.text(6.5, .5,  "Range: %3.1fV" % Vrange, transform=fig.dpi_scale_trans, fontfamily='monospace')
-    t6 = plt.text(6.5, .3,  " Load: %3.1fohm" % Rload, transform=fig.dpi_scale_trans, fontfamily='monospace') 
-    t7 = plt.text(6.5, .1,  "Wsize: %5d#" % chunk, transform=fig.dpi_scale_trans, fontfamily='monospace') 
+    t5 = plt.text(6.5, .3,  "Range: %3.1fV" % Vrange, transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t6 = plt.text(6.5, .1,  " Load: %3.1fohm" % Rload, transform=fig.dpi_scale_trans, fontfamily='monospace') 
 
-    t8 = plt.text(11, .5, "THD(%02d): %5.1fdB (%6.3f%%)" % (thdNum, THD, THDP), transform=fig.dpi_scale_trans, fontfamily='monospace') 
-    t9 = plt.text(11, .3, "  THD-N: %5.1fdB (%6.3f%%)" % (SINAD, SINADP), transform=fig.dpi_scale_trans, fontfamily='monospace')
-    t10 = plt.text(11, .1, "    SNR: %5.1fdB  ENOB %3.1f" % (SNR, ENOB), transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t8 = plt.text(8.5, .3, "THD(%02d): %5.1fdB (%6.3f%%)" % (thdNum, THD, THDP), transform=fig.dpi_scale_trans, fontfamily='monospace') 
+    t9 = plt.text(8.5, .1, "  THD-N: %5.1fdB (%6.3f%%)" % (SINAD, SINADP), transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t10 = plt.text(11.5, .1, "    SNR: %5.1fdB  ENOB %3.1f" % (SNR, ENOB), transform=fig.dpi_scale_trans, fontfamily='monospace')
 
 #    if imdMode:
 #        t11 = plt.text(9, .5, "IMD: %5.1fdB (%4.2f%%)" % (IMD, IMDP), transform=fig.dpi_scale_trans, fontfamily='monospace')
