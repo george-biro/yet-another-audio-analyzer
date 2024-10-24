@@ -270,12 +270,12 @@ parser.add_argument("--csv", type=str, default="", help="print to csv")
 parser.add_argument("--comment", type=str, default="", help="csv comment")
 parser.add_argument("--window", type=str, default="hanning", help="filtering window")
 parser.add_argument("--sim", type=float, default=0, help="Do sumilation with an exact frequency")
-parser.add_argument("--disable-comp", action='store_true', help="Disable single sin compensation")
+parser.add_argument("--comp", type=float, default=0.5, help="Compensation treshold (Hz)")
 parser.add_argument("--enable-avg", action='store_true', help="Disable avg calculation")
 args = parser.parse_args()
 
 doAvg = args.enable_avg
-doComp = not args.disable_comp
+compTsh = args.comp
 Rload = args.rload
 Vrange = args.vrange   
 Frange = args.frange
@@ -415,11 +415,19 @@ for xx in range(0, duration):
         inxCnt = inxCnt + 1
     else:
         inxCnt = 0
- 
+        wclean = None
+    
     pCInx = cinx 
+
     cfreq = flist[cinx]                     # center frequency
     ffreq = calcFFreq(wmag1, flist, cinx)   # fundamental frequency
-   
+    if (abs(ffreq - cfreq) < compTsh):
+        if wclean is None:
+            wclean = getWClean(ts, win, cfreq)
+
+    else:
+        wclean = None
+
     if doAvg:
         if (inxCnt < 3):
             wmagsum = np.zeros(len(flist))
@@ -431,12 +439,9 @@ for xx in range(0, duration):
     else:
         wmagnitude = cuni(wmag1)
 
-    if doComp:
-        wclean = getWClean(ts, win, cfreq if abs(ffreq - cfreq) < .1 else ffreq)
+    if wclean is not None:
         wmagnitude = wmagnitude - wclean * (fmask - mfundamental)
         wmagnitude[wmagnitude < 0] = 0
-    else:
-        wclean = np.zeros(len(wmagnitude)) 
 
     # time domain calculations
     Vpp = np.max(meas) - np.min(meas)
@@ -473,10 +478,21 @@ for xx in range(0, duration):
     ax2.set_ylim([Wrange, 0])
 
     ax2.plot(flist[ilist[0]:ilist[1]], clog(wmagnitude[ilist[0]:ilist[1]]), 'b-')
-    ax2.plot(flist[ilist[0]:ilist[1]], clog(wclean[ilist[0]:ilist[1]]), 'g.')
+    if wclean is not None:
+        ax2.plot(flist[ilist[0]:ilist[1]], clog(wclean[ilist[0]:ilist[1]]), 'g.')
 
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
     ax2.grid()
+
+    mul = math.floor(sRate / cfreq + .5)
+    if isPrime(mul):
+        t12 = plt.text(.5, .5, "CFreq: %10.5fHz" % cfreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
+    else:
+        pl, ph = findPrime(mul)
+        fl = cfreq * float(pl) / float(mul)
+        fh = cfreq * float(ph) / float(mul)
+        t12 = plt.text(.5, .5, "CFreq: %10.5fHz or %10.5fHz" % (fl, fh), transform=fig.dpi_scale_trans, fontfamily='monospace')
+
     t0 = plt.text(.5, .3, "Base : %10.5fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
   
 
@@ -496,14 +512,6 @@ for xx in range(0, duration):
     t10 = plt.text(11.5, .1, "    SNR: %5.1fdB  ENOB %3.1f" % (SNR, ENOB), transform=fig.dpi_scale_trans, fontfamily='monospace')
     
     t11 = plt.text(11.5, .3, "   Rate: %5.0fHz" % (sRate), transform=fig.dpi_scale_trans, fontfamily='monospace')
-    mul = math.floor(sRate / cfreq + .5)
-    if isPrime(mul):
-        t12 = plt.text(.5, .5, "CF %10.5fHz" % cfreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
-    else:
-        pl, ph = findPrime(mul)
-        fl = cfreq * float(pl) / float(mul)
-        fh = cfreq * float(ph) / float(mul)
-        t12 = plt.text(.5, .5, "CF %10.5fHz or %10.5fHz" % (fl, fh), transform=fig.dpi_scale_trans, fontfamily='monospace')
 
 #    if imdMode:
 #        t11 = plt.text(9, .5, "IMD: %5.1fdB (%4.2f%%)" % (IMD, IMDP), transform=fig.dpi_scale_trans, fontfamily='monospace')
