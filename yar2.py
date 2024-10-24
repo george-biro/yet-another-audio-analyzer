@@ -212,6 +212,12 @@ def argsMono(x):
         return 1
     return 2
 
+def argNoise(x):
+    if (x < 0):
+        return 0
+
+    return 10**(x / -20)
+
 class CustomHelpFormatter(argparse.HelpFormatter):
     def _get_help_string(self, action):
         help = action.help
@@ -244,7 +250,8 @@ parser.add_argument("--plot", type=str, default="", help="plot to file")
 parser.add_argument("--csv", type=str, default="", help="print to csv")
 parser.add_argument("--comment", type=str, default="", help="csv comment")
 parser.add_argument("--window", type=str, default="hanning", help="filtering window")
-parser.add_argument("--sim", type=float, default=0, help="Do sumilation with an exact frequency")
+parser.add_argument("--simfreq", type=float, default=0, help="Do sumilation with an exact frequency")
+parser.add_argument("--simnoise", type=float, default=-1, help="Do simulation with exact noise (in dB) amplitude")
 parser.add_argument("--comp", type=float, default=0.1, help="Compensation treshold (Hz)")
 parser.add_argument("--avg", action='store_true', help="Disable avg calculation")
 parser.add_argument("--flev", type=float, default=120, help="Notch filter level in dB")
@@ -259,7 +266,8 @@ Wrange = args.wrange
 adcRng = args.adcrng    # voltage range of ADC
 thdNum = args.thd       # number of harmonics to be checked
 skip = args.skip
-simFreq = args.sim
+simFreq = args.simfreq
+simNoise = argNoise(args.simnoise)
 flev = 10**(args.flev / -20)
 
 iform, dtype, adcRes = argAdc(args)
@@ -350,6 +358,9 @@ for xx in range(0, duration):
     # record data chunk
     if stream is None:
         meas = np.sin(2 * np.pi * simFreq * ts / 1000 + random.random() * np.pi)* win
+        if simNoise > 1e-6:
+            meas = meas + np.random.normal(scale = simNoise * .5, size = len(meas))
+
     else:
         stream.start_stream()
         data = stream.read(chunk + skip, exception_on_overflow=False)
