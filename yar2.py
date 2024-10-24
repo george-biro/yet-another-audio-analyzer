@@ -267,6 +267,23 @@ def argsMono(x):
         return 1
     return 2
 
+def calcFFreq(wmagnitude, flist, cinx):
+    x = np.zeros(len(wmagnitude))
+    x[cinx] = 1
+    if cinx > 0:
+        x[cinx - 1] = 1
+    
+    cinxr = cinx + 1
+    if cinxr < len(wmagnitude):
+        x[cinxr] = 1
+
+    y = wmagnitude * x
+    return np.sum(flist * y) / np.sum(y)
+
+def getWClean(ts, win, ffreq):
+    mclean = np.sin(2 * np.pi * ffreq * ts / 1000) * win
+    wcc = np.fft.rfft(mclean) * fmask
+    return cuni(np.abs(wcc) / len(wcc))
 
 chSel = args.chsel      
 chNum = args.chnum
@@ -384,29 +401,30 @@ for xx in range(0, duration):
     if (len(wmag1) != len(flist)):
         print("len(w)%d != len(flist)%d" % (len(wmag1), len(flist)))
         quit()
+    
     cinx, mfundamental, mharmonics = carrier(wmag1, thdNum, fmask)
     if (abs(np.sum(mfundamental) - 1) > .01):
         quit()
+    
     if (np.sum(mharmonics) >= np.sum(fmask)):
         quit()
 
-    ffreq = flist[cinx]
     if (pCInx == cinx):
         inxCnt = inxCnt + 1
     else:
         inxCnt = 0
+
+    if (inxCnt < 3):
         wmagsum = np.zeros(len(flist))
         wmagdiv = 0
         
-        mclean = np.sin(2 * np.pi * ffreq * ts / 1000) * win
-        wcc = np.fft.rfft(mclean) * fmask
-        wclean = cuni(np.abs(wcc) / len(wcc))
-
-
-    pCInx = cinx
+    pCInx = cinx 
+    cfreq = flist[cinx]
+    ffreq = calcFFreq(wmag1, flist, cinx)
+    wclean = getWClean(ts, win, cfreq if abs(ffreq - cfreq) < .1 else ffreq)
     wmagsum = wmagsum + wmag1
     wmagdiv = wmagdiv + 1
-    wmagnitude = cuni(wmagsum / wmagdiv) - wclean * (fmask - mfundamental) 
+    wmagnitude = cuni(wmagsum / wmagdiv) - wclean * (fmask - mfundamental)
     wmagnitude[wmagnitude < 0] = 0
 
     # time domain calculations
@@ -429,7 +447,7 @@ for xx in range(0, duration):
 #        IMD, IMDP = imd(w2, iifreq[0], iifreq[1])
         
 
-    if ((inxCnt == 2) and (csvfile != "")):
+    if ((inxCnt == 10) and (csvfile != "")):
         f = open(csvfile, "a")
         f.write("%f,%f,%f,%f,%f,%f,%f,%f,%f\n" % (ffreq, THD, THDP, SINAD, SINADP, SNR, ENOB, Vrms, Prms))
 #displaying
@@ -448,10 +466,10 @@ for xx in range(0, duration):
 
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
     ax2.grid()
-    t0 = plt.text(0.5, .3, "Base : %10.5fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t0 = plt.text(.5, .3, "Base : %10.5fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
   
 
-    t7 = plt.text(0.5, .1, "Wsize: %5d#" % chunk, transform=fig.dpi_scale_trans, fontfamily='monospace') 
+    t7 = plt.text(.5, .1, "Wsize: %5d#" % chunk, transform=fig.dpi_scale_trans, fontfamily='monospace') 
 
     t1 = plt.text(2.5, .3, "   Vpp: %5.1fV" % Vpp, transform=fig.dpi_scale_trans,  fontfamily='monospace')
     t2 = plt.text(2.5, .1, " Ppeak: %5.1fW" % Ppeak, transform=fig.dpi_scale_trans,  fontfamily='monospace')
@@ -467,15 +485,14 @@ for xx in range(0, duration):
     t10 = plt.text(11.5, .1, "    SNR: %5.1fdB  ENOB %3.1f" % (SNR, ENOB), transform=fig.dpi_scale_trans, fontfamily='monospace')
     
     t11 = plt.text(11.5, .3, "   Rate: %5.0fHz" % (sRate), transform=fig.dpi_scale_trans, fontfamily='monospace')
-
-    mul = int(sRate / ffreq + .5)
+    mul = math.floor(sRate / cfreq + .5)
     if isPrime(mul):
-        t12 = plt.text(0.5, .5, "Freq OK", transform=fig.dpi_scale_trans, fontfamily='monospace')
+        t12 = plt.text(.5, .5, "CF %10.5fHz" % cfreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
     else:
         pl, ph = findPrime(mul)
-        fl = ffreq * float(pl) / float(mul)
-        fh = ffreq * float(ph) / float(mul)
-        t12 = plt.text(0.5, .5, "(%5.1fHz or %5.1fHz)" % (fl, fh), transform=fig.dpi_scale_trans, fontfamily='monospace')
+        fl = cfreq * float(pl) / float(mul)
+        fh = cfreq * float(ph) / float(mul)
+        t12 = plt.text(.5, .5, "CF %10.5fHz or %10.5fHz" % (fl, fh), transform=fig.dpi_scale_trans, fontfamily='monospace')
 
 #    if imdMode:
 #        t11 = plt.text(9, .5, "IMD: %5.1fdB (%4.2f%%)" % (IMD, IMDP), transform=fig.dpi_scale_trans, fontfamily='monospace')
@@ -483,7 +500,7 @@ for xx in range(0, duration):
 #        t13 = plt.text(9, .1, " F2: %5.1fHz" % flist[iifreq[1]], transform=fig.dpi_scale_trans, fontfamily='monospace')
     
     plt.pause(.01)
-    if ((inxCnt == 2) and (picfile != "")):
+    if ((inxCnt == 10) and (picfile != "")):
         plt.savefig("%s_%.0fHz%s" % (picfile, ffreq, picfile_ext))
 
     #if (len(cf) > 0):
