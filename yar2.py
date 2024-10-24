@@ -75,8 +75,8 @@ def dbPow(k):
     return 10.*math.log10(k)
 
 # Determine carrier and harminics
-def carrier(wmagnitude, num, fmask):
-    cinx = np.argmax(wmagnitude)
+def carrier(w, num, fm):
+    cinx = np.argmax(w)
     if cinx < 1:
         j = 1
         k = 1
@@ -84,14 +84,21 @@ def carrier(wmagnitude, num, fmask):
         j = cinx 
         k = num
 
-    mfundamental = np.zeros(len(wmagnitude))
-    mfundamental[cinx] = 1
-    mharmonics = np.zeros(len(wmagnitude))
+    mharmonics = np.zeros(len(w))
     (mharmonics[cinx::j])[:k] = 1
-    mharmonics = mharmonics - mfundamental
-    mfundamental = mfundamental * fmask
-    mharmonics = mharmonics * fmask
-    return cinx, mfundamental, mharmonics
+    mharmonics[cinx] = 0
+    mharmonics = mharmonics * fm
+    return cinx, mharmonics
+
+def wclean(ts, win, cfreq):
+    mclean = np.sin(2 * np.pi * cfreq * ts / 1000) * win
+    wcc = np.fft.rfft(mclean)
+    return cuni(np.abs(wcc) / len(wcc))
+
+def mfund(wc, flev):
+    rv = np.ones(len(wc))
+    rv[wc < flev] = 0
+    return rv 
 
 def rms(meas):
     return (np.sum(np.square(meas)) / len(meas))**0.5
@@ -106,66 +113,38 @@ def thd_iec(wmagnitude, mharminics):
     k = (vharmonics / vall)**0.5
     return dbRel(k), (100.*k)
 
-def thd_ieee(wmagnitude, mfundamental, mharmonics):
-
-    vfundamental = np.sum(np.square(wmagnitude * mfundamental))
+def thd_ieee(wmagnitude, mharmonics, cinx):
+    vfundamental = wmagnitude[cinx]
     vharmonics = np.sum(np.square(wmagnitude * mharmonics))
     if (vfundamental < 1e-100):
         return float('nan'), float('nan')
     
-    k = (vharmonics / vfundamental)**0.5
+    k = (vharmonics**.5) / vfundamental
     return dbRel(k), (100.*k)
 
 # same a sinad
-def thdn(wmagnitude, mfundamental, fmask):
-
-    vfundamental = np.sum(np.square(wmagnitude * mfundamental))
-    mnoise = fmask - mfundamental
-    vnoise = np.sum(np.square(wmagnitude * mnoise)) 
+def thdn(wm, mf, fm, cinx):
+    vfundamental = wm[cinx]
+    mnoise = fm - mf
+    vnoise = np.sum(np.square(wm * mnoise)) 
     
     if (vfundamental < 1e-100):
         return float('nan'), float('nan')
 
-    k = (vnoise / vfundamental)**0.5
+    k = (vnoise**.5) / vfundamental
     return dbRel(k), (100.*k)
 
 
-def snr(wmagnitue, mfundamental, mharmonics, fmask):
+def snr(wm, mf, mh, fm, cinx):
     
-    vsignal = np.sum(np.square(wmagnitude * mfundamental))
-    mnoise = fmask - mfundamental - mharmonics
-    vnoise = np.sum(np.square(wmagnitude * mnoise))
+    vsignal = wm[cinx]
+    mnoise = fm - mf - mh
+    vnoise = np.sum(np.square(wm * mnoise))
 
     if (vnoise < 1e-100):
-        return float('nan'), float('nan')
+        return float('nan')
 
-    k = (vsignal / vnoise)**0.5
-    return dbRel(k)
-
-def thdn2(wcomplex, mfundamental, fmask):
-
-    vfundamental = np.sum(np.square(np.fft.irfft(wcomplex * mfundamental)))
-    mnsh = fmask - mfundamental
-    vnsh = np.sum(np.square(np.fft.irfft(wcomplex * mnsh)))  
-
-    if (vfundamental < 1e-100):
-        return float('nan'), float('nan')
-    print(vfundamental) 
-    print("vfund %f vnoise %f" % (vfundamental, vnsh))
-    k = ((vnsh / vfundamental)**0.5)
-    return dbRel(k), (100.*k)
-
-def snr2(wcomplex, mfundamental, mharmonics, fmask):
-    
-    msignal = mfundamental + mharmonics
-    vsignal = np.sum(np.square(np.fft.irfft(wcomplex * msignal)))
-    mnoise = fmask - msignal
-    vnoise = np.sum(np.square(np.fft.irfft(wcomplex * mnoise)))
-
-    if (vnoise < 1e-100):
-        return float('nan'), float('nan')
-
-    k = ((vsignal / vnoise)**0.5) 
+    k = vsignal / (vnoise**0.5)
     return dbRel(k)
 
 def enob(sinad):
@@ -178,12 +157,12 @@ def ifind(arr, val):
 def checkImd(iifreq):
     return ((iifreq[0] != iifreq[1]) and (iifreq[0] != 0) and (iifreq[1] != 0))
 
-def cuni(wmagnitude):
-    wmax = np.max(wmagnitude)
+def cuni(w):
+    wmax = np.max(w)
     if (wmax > 1e-6):
-        wuni = wmagnitude / wmax
+        wuni = w / wmax
     else:
-        wuni = wmagnitude
+        wuni = w
 
     return wuni
 
@@ -192,23 +171,19 @@ def clog(wuni2):
     wuni[wuni < 1e-10] = 1e-10
     return 20*np.log10(wuni)
 
-def getWClean(ts, win, ffreq):
-    mclean = np.sin(2 * np.pi * ffreq * ts / 1000) * win
-    wcc = np.fft.rfft(mclean) * fmask
-    return cuni(np.abs(wcc) / len(wcc))
 
-def calcFFreq(wmagnitude, flist, cinx):
-    x = np.zeros(len(wmagnitude))
+def calcFFreq(w, fl, cinx):
+    x = np.zeros(len(w))
     x[cinx] = 1
     if cinx > 0:
         x[cinx - 1] = 1
     
     cinxr = cinx + 1
-    if cinxr < len(wmagnitude):
+    if cinxr < len(w):
         x[cinxr] = 1
 
-    y = wmagnitude * x
-    return np.sum(flist * y) / np.sum(y)
+    y = w * x
+    return np.sum(fl * y) / np.sum(y)
 
 def argAdc(args):
     if (args.adcres == 16):
@@ -229,7 +204,7 @@ def argAdc(args):
     return iform, dtype, adcRes
 
 def argFFTsize(x):
-    return round(x / 2) * 2
+    return 2**math.floor(math.log2(x) + .5)
 
 def argsMono(x):
     if x:
@@ -270,11 +245,12 @@ parser.add_argument("--csv", type=str, default="", help="print to csv")
 parser.add_argument("--comment", type=str, default="", help="csv comment")
 parser.add_argument("--window", type=str, default="hanning", help="filtering window")
 parser.add_argument("--sim", type=float, default=0, help="Do sumilation with an exact frequency")
-parser.add_argument("--comp", type=float, default=0.5, help="Compensation treshold (Hz)")
-parser.add_argument("--enable-avg", action='store_true', help="Disable avg calculation")
+parser.add_argument("--comp", type=float, default=0.1, help="Compensation treshold (Hz)")
+parser.add_argument("--avg", action='store_true', help="Disable avg calculation")
+parser.add_argument("--flev", type=float, default=120, help="Notch filter level in dB")
 args = parser.parse_args()
 
-doAvg = args.enable_avg
+doAvg = args.avg
 compTsh = args.comp
 Rload = args.rload
 Vrange = args.vrange   
@@ -284,6 +260,7 @@ adcRng = args.adcrng    # voltage range of ADC
 thdNum = args.thd       # number of harmonics to be checked
 skip = args.skip
 simFreq = args.sim
+flev = 10**(args.flev / -20)
 
 iform, dtype, adcRes = argAdc(args)
 
@@ -404,30 +381,22 @@ for xx in range(0, duration):
         print("len(w)%d != len(flist)%d" % (len(wmag1), len(flist)))
         quit()
     
-    cinx, mfundamental, mharmonics = carrier(wmag1, thdNum, fmask)
-    if (abs(np.sum(mfundamental) - 1) > .01):
-        quit()
-    
+    cinx, mharmonics = carrier(wmag1, thdNum, fmask)
     if (np.sum(mharmonics) >= np.sum(fmask)):
         quit()
 
+    cfreq = flist[cinx]                     # center frequency
+    ffreq = calcFFreq(wmag1, flist, cinx)   # fundamental frequency
+    
     if (pCInx == cinx):
         inxCnt = inxCnt + 1
     else:
         inxCnt = 0
-        wclean = None
     
-    pCInx = cinx 
-
-    cfreq = flist[cinx]                     # center frequency
-    ffreq = calcFFreq(wmag1, flist, cinx)   # fundamental frequency
-    if (abs(ffreq - cfreq) < compTsh):
-        if wclean is None:
-            wclean = getWClean(ts, win, cfreq)
-
-    else:
-        wclean = None
-
+    pCInx = cinx
+    useCFreq = (abs(ffreq - cfreq) < compTsh)
+    wc = wclean(ts, win, cfreq if useCFreq else ffreq)    
+    mfundamental = mfund(wc, flev) * fmask
     if doAvg:
         if (inxCnt < 3):
             wmagsum = np.zeros(len(flist))
@@ -439,10 +408,6 @@ for xx in range(0, duration):
     else:
         wmagnitude = cuni(wmag1)
 
-    if wclean is not None:
-        wmagnitude = wmagnitude - wclean * (fmask - mfundamental)
-        wmagnitude[wmagnitude < 0] = 0
-
     # time domain calculations
     Vpp = np.max(meas) - np.min(meas)
     Ppeak = np.max(np.square(meas)) / Rload
@@ -451,9 +416,9 @@ for xx in range(0, duration):
 
      # freq domain calculations
 
-    THD, THDP = thd_ieee(wmagnitude, mfundamental, mharmonics)
-    SINAD, SINADP = thdn(wmagnitude, mfundamental, fmask)
-    SNR = snr(wmagnitude, mfundamental, mharmonics, fmask)
+    THD, THDP = thd_ieee(wmagnitude, mharmonics, cinx)
+    SINAD, SINADP = thdn(wmagnitude, mfundamental, fmask, cinx)
+    SNR = snr(wmagnitude, mfundamental, mharmonics, fmask, cinx)
 #    SINAD, SINADP = thdn2(wcomplex, mfundamental, fmask)
 #    SNR = snr2(wcomplex, mfundamental, mharmonics, fmask)
     ENOB = enob(SNR)
@@ -478,15 +443,17 @@ for xx in range(0, duration):
     ax2.set_ylim([Wrange, 0])
 
     ax2.plot(flist[ilist[0]:ilist[1]], clog(wmagnitude[ilist[0]:ilist[1]]), 'b-')
-    if wclean is not None:
-        ax2.plot(flist[ilist[0]:ilist[1]], clog(wclean[ilist[0]:ilist[1]]), 'g.')
+    if wc is not None:
+        ax2.plot(flist[ilist[0]:ilist[1]], clog(wc[ilist[0]:ilist[1]]), 'g.')
 
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
     ax2.grid()
 
     mul = math.floor(sRate / cfreq + .5)
     if isPrime(mul):
-        t12 = plt.text(.5, .5, "CFreq: %10.5fHz" % cfreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
+        ch = '*' if useCFreq else ' '
+        t12 = plt.text(.5, .5, "CFreq: %10.5fHz%c" % 
+                (cfreq, ch), transform=fig.dpi_scale_trans, fontfamily='monospace')
     else:
         pl, ph = findPrime(mul)
         fl = cfreq * float(pl) / float(mul)
