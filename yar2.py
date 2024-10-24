@@ -238,7 +238,7 @@ parser.add_argument("--frange", type=float, default="40000", help="displayed fre
 parser.add_argument("--trange", type=float, default="10000", help="displayed time range")
 parser.add_argument("--wrange", type=float, default="-150", help="FFT range in dB")
 parser.add_argument("--rload", type=float, default=8, help="Load resistor in ohm")
-parser.add_argument("--thd", type=int, default=3, help="Number of harmonics for THD calculation")
+parser.add_argument("--thd", type=int, default=7, help="Number of harmonics for THD calculation")
 parser.add_argument("--duration", type=int, default=240, help="time to exit")
 parser.add_argument("--plot", type=str, default="", help="plot to file")
 parser.add_argument("--csv", type=str, default="", help="print to csv")
