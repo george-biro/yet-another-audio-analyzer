@@ -178,6 +178,38 @@ def ifind(arr, val):
 def checkImd(iifreq):
     return ((iifreq[0] != iifreq[1]) and (iifreq[0] != 0) and (iifreq[1] != 0))
 
+def cuni(wmagnitude):
+    wmax = np.max(wmagnitude)
+    if (wmax > 1e-6):
+        wuni = wmagnitude / wmax
+    else:
+        wuni = wmagnitude
+
+    return wuni
+
+def clog(wuni2):
+    wuni = wuni2
+    wuni[wuni < 1e-10] = 1e-10
+    return 20*np.log10(wuni)
+
+def getWClean(ts, win, ffreq):
+    mclean = np.sin(2 * np.pi * ffreq * ts / 1000) * win
+    wcc = np.fft.rfft(mclean) * fmask
+    return cuni(np.abs(wcc) / len(wcc))
+
+def calcFFreq(wmagnitude, flist, cinx):
+    x = np.zeros(len(wmagnitude))
+    x[cinx] = 1
+    if cinx > 0:
+        x[cinx - 1] = 1
+    
+    cinxr = cinx + 1
+    if cinxr < len(wmagnitude):
+        x[cinxr] = 1
+
+    y = wmagnitude * x
+    return np.sum(flist * y) / np.sum(y)
+
 def argAdc(args):
     if (args.adcres == 16):
         iform = pyaudio.paInt16 # 16-bit resolution
@@ -199,6 +231,11 @@ def argAdc(args):
 def argFFTsize(x):
     return round(x / 2) * 2
 
+def argsMono(x):
+    if x:
+        print("MONO mode!")
+        return 1
+    return 2
 
 class CustomHelpFormatter(argparse.HelpFormatter):
     def _get_help_string(self, action):
@@ -233,8 +270,12 @@ parser.add_argument("--csv", type=str, default="", help="print to csv")
 parser.add_argument("--comment", type=str, default="", help="csv comment")
 parser.add_argument("--window", type=str, default="hanning", help="filtering window")
 parser.add_argument("--sim", type=float, default=0, help="Do sumilation with an exact frequency")
+parser.add_argument("--disable-comp", action='store_true', help="Disable single sin compensation")
+parser.add_argument("--enable-avg", action='store_true', help="Disable avg calculation")
 args = parser.parse_args()
 
+doAvg = args.enable_avg
+doComp = not args.disable_comp
 Rload = args.rload
 Vrange = args.vrange   
 Frange = args.frange
@@ -245,45 +286,6 @@ skip = args.skip
 simFreq = args.sim
 
 iform, dtype, adcRes = argAdc(args)
-
-def cuni(wmagnitude):
-    wmax = np.max(wmagnitude)
-    if (wmax > 1e-6):
-        wuni = wmagnitude / wmax
-    else:
-        wuni = wmagnitude
-
-    return wuni
-
-def clog(wuni2):
-    wuni = wuni2
-    wuni[wuni < 1e-10] = 1e-10
-    return 20*np.log10(wuni)
-
-
-def argsMono(x):
-    if x:
-        print("MONO mode!")
-        return 1
-    return 2
-
-def calcFFreq(wmagnitude, flist, cinx):
-    x = np.zeros(len(wmagnitude))
-    x[cinx] = 1
-    if cinx > 0:
-        x[cinx - 1] = 1
-    
-    cinxr = cinx + 1
-    if cinxr < len(wmagnitude):
-        x[cinxr] = 1
-
-    y = wmagnitude * x
-    return np.sum(flist * y) / np.sum(y)
-
-def getWClean(ts, win, ffreq):
-    mclean = np.sin(2 * np.pi * ffreq * ts / 1000) * win
-    wcc = np.fft.rfft(mclean) * fmask
-    return cuni(np.abs(wcc) / len(wcc))
 
 chSel = args.chsel      
 chNum = args.chnum
@@ -413,19 +415,28 @@ for xx in range(0, duration):
         inxCnt = inxCnt + 1
     else:
         inxCnt = 0
-
-    if (inxCnt < 3):
-        wmagsum = np.zeros(len(flist))
-        wmagdiv = 0
-        
+ 
     pCInx = cinx 
-    cfreq = flist[cinx]
-    ffreq = calcFFreq(wmag1, flist, cinx)
-    wclean = getWClean(ts, win, cfreq if abs(ffreq - cfreq) < .1 else ffreq)
-    wmagsum = wmagsum + wmag1
-    wmagdiv = wmagdiv + 1
-    wmagnitude = cuni(wmagsum / wmagdiv) - wclean * (fmask - mfundamental)
-    wmagnitude[wmagnitude < 0] = 0
+    cfreq = flist[cinx]                     # center frequency
+    ffreq = calcFFreq(wmag1, flist, cinx)   # fundamental frequency
+   
+    if doAvg:
+        if (inxCnt < 3):
+            wmagsum = np.zeros(len(flist))
+            wmagdiv = 0
+
+        wmagsum = wmagsum + wmag1
+        wmagdiv = wmagdiv + 1
+        wmagnitude = cuni(wmagsum / wmagdiv)
+    else:
+        wmagnitude = cuni(wmag1)
+
+    if doComp:
+        wclean = getWClean(ts, win, cfreq if abs(ffreq - cfreq) < .1 else ffreq)
+        wmagnitude = wmagnitude - wclean * (fmask - mfundamental)
+        wmagnitude[wmagnitude < 0] = 0
+    else:
+        wclean = np.zeros(len(wmagnitude)) 
 
     # time domain calculations
     Vpp = np.max(meas) - np.min(meas)
