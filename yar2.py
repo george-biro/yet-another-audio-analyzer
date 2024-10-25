@@ -4,27 +4,27 @@
 #
 # Copyright 2024 George Biro
 #
-# This program is free software: you can redistribute it and/or modify it 
-# under the terms of the GNU General Public License as published by the 
-# Free Software Foundation, either version 3 of the License, or 
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS 
-# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
+#
+# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# This program is distributed in the hope that it will be useful, but 
-# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY 
-# or FITNESS FOR A PARTICULAR PURPOSE. 
-# 
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE.
+#
 # See the GNU General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License along 
-# with this program. If not, see <https://www.gnu.org/licenses/>. 
+# You should have received a copy of the GNU General Public License along
+# with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 # For noise measurement:
 #
@@ -33,16 +33,15 @@
 # 373 / 65536 * 192000 = 1092.8Hz
 
 
+import argparse
+import os.path
+import time
 import math
+import random
 import matplotlib.pyplot as plt
 import numpy as np
 import pyaudio
 # import sounddevice as sd
-import time
-import sys
-import argparse
-import os.path
-import random
 
 # display the list of sound device
 def list_sound_devices(audio):
@@ -63,12 +62,12 @@ def isPrime(n):
     for i in range(2, int(n**0.5) + 1):
         if (n % i == 0):
             return True
-            
+
     return False
 
 # find pime numbers around a given number
 #
-# To find the bigest smallest prime number and and 
+# To find the bigest smallest prime number and and
 # smallest greater number. So for exmlpe the call
 #
 # findPrime(9) -> 7,11
@@ -94,12 +93,14 @@ def findPrime(n):
 def dbRel(k):
     if (k <= 0):
         return float('nan')
+    
     return 20.*math.log10(k)
 
 # Compute power dB value
 def dbPow(k):
     if (k <= 0):
         return float('nan')
+    
     return 10.*math.log10(k)
 
 # Notch filter mask
@@ -113,7 +114,7 @@ def dbPow(k):
 def notch(wc, lev):
     rv = np.zeros(len(wc))
     rv[wc > lev] = 1
-    return rv 
+    return rv
 
 # Determine carrier and harminics
 def carrier(w, num, fm, lev):
@@ -122,7 +123,7 @@ def carrier(w, num, fm, lev):
         j = 1
         k = 1
     else:
-        j = cinx 
+        j = cinx
         k = num
 
     mfundamental = notch(w, w[cinx] * lev)
@@ -149,22 +150,23 @@ def wclean(ts, win, cfreq, flev):
 def rms(meas):
     return (np.sum(np.square(meas)) / len(meas))**0.5
 
-def thd_iec(wmagnitude, mharminics):
 
-    vall = np.sum(np.square(wmagnitude))
-    vharmonics = np.sum(np.square(wmagnitude * mharmonics))
-    if (vall < 1e-100):
-        return float('nan'), float('nan')
-    
-    k = (vharmonics / vall)**0.5
-    return dbRel(k), (100.*k)
+#def thd_iec(wmagnitude, mharminics):
+#
+#    vall = np.sum(np.square(wmagnitude))
+#    vharmonics = np.sum(np.square(wmagnitude * mharmonics))
+#    if (vall < 1e-100):
+#        return float('nan'), float('nan')
+#
+#    k = (vharmonics / vall)**0.5
+#    return dbRel(k), (100.*k)
 
-def thd_ieee(wmagnitude, mharmonics, cinx):
-    vfundamental = wmagnitude[cinx]
-    vharmonics = np.sum(np.square(wmagnitude * mharmonics))
+def thd_ieee(wm, mh, cinx):
+    vfundamental = wm[cinx]
+    vharmonics = np.sum(np.square(wm * mh))
     if (vfundamental < 1e-100):
         return float('nan'), float('nan')
-    
+
     k = (vharmonics**.5) / vfundamental
     return dbRel(k), (100.*k)
 
@@ -173,8 +175,8 @@ def thdn(wm, mfd, mfl, fm):
 
     vfundamental = np.sum(np.square(wm * mfd))
     mnoise = fm - mfl
-    vnoise = np.sum(np.square(wm * mnoise)) 
-    
+    vnoise = np.sum(np.square(wm * mnoise))
+
     if (vfundamental < 1e-100):
         return float('nan'), float('nan')
 
@@ -182,8 +184,8 @@ def thdn(wm, mfd, mfl, fm):
     return dbRel(k), (100.*k)
 
 def snr(wm, mfd, mflt, fm, mh):
-    
-    vsignal = np.sum(np.square(wm * mfd))    
+
+    vsignal = np.sum(np.square(wm * mfd))
     mnoise = fm - mflt - mh
     vnoise = np.sum(np.square(wm * mnoise))
     if (vnoise < 1e-100):
@@ -219,14 +221,14 @@ def clog(wuni2):
 def simSig(sFreq, sNoise, w):
     r = np.sin(2 * np.pi * sFreq * ts / 1000 + random.random() * np.pi)
     if (sNoise > 1e-6):
-            r = r + np.random.normal(0, sNoise, len(r))
+        r = r + np.random.normal(0, sNoise, len(r))
 
     return r * w
 
 #    x = mfund
 #    if cinx > 0:
 #        x[cinx - 1] = 1
-#    
+#
 #    cinxr = cinx + 1
 #    if cinxr < len(w):
 #        x[cinxr] = 1
@@ -309,14 +311,14 @@ args = parser.parse_args()
 
 doAvg = args.avg
 Rload = args.rload
-Vrange = args.vrange   
+Vrange = args.vrange
 Frange = args.frange
 Wrange = args.wrange
 adcRng = args.adcrng    # voltage range of ADC
 thdNum = args.thd       # number of harmonics to be checked
 skip = args.skip
 simFreq = args.simfreq
-simNoise = argNoise(args.simnoise) 
+simNoise = argNoise(args.simnoise)
 fltTsh = 10**(args.flttsh / -20)
 fndTsh = 10**(args.fndtsh / -20)
 frqTsh = 10**(args.frqtsh / -20)
@@ -324,9 +326,9 @@ cfTsh = args.cftsh
 
 iform, dtype, adcRes = argAdc(args)
 
-chSel = args.chsel      
+chSel = args.chsel
 chNum = args.chnum
-chunk = argFFTsize(args.chunk)      # FFT window size 
+chunk = argFFTsize(args.chunk)      # FFT window size
 sRate = args.freq  # sampling rate
 duration = args.duration
 dev_index = args.dev    # device index found (see printout)
@@ -373,7 +375,7 @@ wmagdiv = 0
 # Determin Time Range
 tmax = chunk / sRate * 1000.0
 Trange = [ max((tmax - args.trange) * .5, 0), min((tmax + args.trange) * .5, tmax) ]
-ts = np.linspace(0, tmax, chunk) 
+ts = np.linspace(0, tmax, chunk)
 
 if args.window == "bartlet":
     win = np.bartlet(chunk)
@@ -386,12 +388,12 @@ elif args.window == "hanning":
 else:
     win = np.ones(chunk)
 
-csvfile = args.csv 
+csvfile = args.csv
 
 if (csvfile != "") and (not os.path.isfile(csvfile)):
-    f = open(csvfile, 'w+')
-    f.write("Carrier,THD,THD DB,THD-N,THD-N DB,SNR,ENOB,Vrms,Prms\n")
-    f.close()
+    with open(csvfile, 'w+') as f:
+        f.write("Carrier,THD,THD DB,THD-N,THD-N DB,SNR,ENOB,Vrms,Prms\n")
+        f.close()
 
 if args.plot != "":
     picfile, picfile_ext = os.path.splitext(args.plot)
@@ -406,7 +408,7 @@ tsStart = time.time()
 wrCnt = 10 if doAvg else 3
 
 while (time.time() - tsStart < duration):
-   
+
     # record data chunk
     if stream is None:
         meas = simSig(simFreq, simNoise, win)
@@ -419,12 +421,12 @@ while (time.time() - tsStart < duration):
             measRaw = measFull[chSel::2]
         else:
             measRaw = measFull
-        meas = measRaw * win * (adcRng / adcRes) 
+        meas = measRaw * win * (adcRng / adcRes)
 
     if len(meas) < 16:
         print("len(meas) < 16")
         quit()
-        
+
     ax1.cla()
     ax1.set_title('Time Domain', loc='left')
     ax1.set_xlabel('Time (ms)')
@@ -440,22 +442,22 @@ while (time.time() - tsStart < duration):
     if (len(wmag1) != len(flist)):
         print("len(w)%d != len(flist)%d" % (len(wmag1), len(flist)))
         quit()
-    
+
     cinx, mfundamental, mharmonics = carrier(wmag1, thdNum, fmask, fndTsh)
     if (np.sum(mharmonics) >= np.sum(fmask)):
         quit()
 
     cfreq = flist[cinx]                                   # center frequency
     ffreq = calcFFreq(wmag1, flist, frqTsh)   # fundamental frequency
-    
+
     if (pCInx == cinx):
         iCnt = iCnt + 1
     else:
         iCnt = 0
-    
+
     pCInx = cinx
     useCFreq = (abs(ffreq - cfreq) < cfTsh)
-    wc = wclean(ts, win, cfreq if useCFreq else ffreq, fltTsh)    
+    wc = wclean(ts, win, cfreq if useCFreq else ffreq, fltTsh)
     mfilter = notch(wc, 1e-20) * fmask
 
     if doAvg:
@@ -490,9 +492,9 @@ while (time.time() - tsStart < duration):
 
     if ((iCnt == wrCnt) and (csvfile != "")):
         print("write file %s" % csvfile)
-        f = open(csvfile, "a")
-        f.write("%f,%f,%f,%f,%f,%f,%f,%f,%f\n" % (ffreq, THD, THDP, SINAD, SINADP, SNR, ENOB, Vrms, Prms))
-        f.close()
+        with open(csvfile, 'a') as f:
+            f.write("%f,%f,%f,%f,%f,%f,%f,%f,%f\n" % (ffreq, THD, THDP, SINAD, SINADP, SNR, ENOB, Vrms, Prms))
+            f.close()
 #displaying
     # manage axles
     ax2.cla()
@@ -500,7 +502,7 @@ while (time.time() - tsStart < duration):
     ax2.set_xlabel('Frequency (Hz)')
     ax2.set_ylabel('Amplitude (dB)')
     ax2.set_xlim([FrangeLow, Frange])
-    
+
     ax2.set_xscale("log")
     ax2.set_ylim([Wrange, 0])
 
@@ -514,7 +516,7 @@ while (time.time() - tsStart < duration):
     mul = math.floor(sRate / cfreq + .5)
     if isPrime(mul):
         ch = '*' if useCFreq else ' '
-        t12 = plt.text(.5, .5, "CFreq: %10.5fHz%c" % 
+        t12 = plt.text(.5, .5, "CFreq: %10.5fHz%c" %
                 (cfreq, ch), transform=fig.dpi_scale_trans, fontfamily='monospace')
     else:
         pl, ph = findPrime(mul)
@@ -523,10 +525,7 @@ while (time.time() - tsStart < duration):
         t12 = plt.text(.5, .5, "CFreq: %10.5fHz or %10.5fHz" % (fl, fh), transform=fig.dpi_scale_trans, fontfamily='monospace')
 
     t0 = plt.text(.5, .3, "Base : %10.5fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
-  
-
-    t7 = plt.text(.5, .1, "Wsize: %5d#" % chunk, transform=fig.dpi_scale_trans, fontfamily='monospace') 
-
+    t7 = plt.text(.5, .1, "Wsize: %5d#" % chunk, transform=fig.dpi_scale_trans, fontfamily='monospace')
     t1 = plt.text(2.5, .3, "   Vpp: %5.1fV" % Vpp, transform=fig.dpi_scale_trans,  fontfamily='monospace')
     t2 = plt.text(2.5, .1, " Ppeak: %5.1fW" % Ppeak, transform=fig.dpi_scale_trans,  fontfamily='monospace')
 
@@ -534,19 +533,18 @@ while (time.time() - tsStart < duration):
     t4 = plt.text(4.5, .1, "E Pwr: %5.1fW" % Prms, transform=fig.dpi_scale_trans, fontfamily='monospace')
 
     t5 = plt.text(6.5, .3,  "Range: %3.1fV" % Vrange, transform=fig.dpi_scale_trans, fontfamily='monospace')
-    t6 = plt.text(6.5, .1,  " Load: %3.1fohm" % Rload, transform=fig.dpi_scale_trans, fontfamily='monospace') 
-
-    t8 = plt.text(8.5, .3, "THD(%02d): %5.1fdB (%6.3f%%)" % (thdNum, THD, THDP), transform=fig.dpi_scale_trans, fontfamily='monospace') 
+    t6 = plt.text(6.5, .1,  " Load: %3.1fohm" % Rload, transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t8 = plt.text(8.5, .3, "THD(%02d): %5.1fdB (%6.3f%%)" % (thdNum, THD, THDP), transform=fig.dpi_scale_trans, fontfamily='monospace')
     t9 = plt.text(8.5, .1, "  THD-N: %5.1fdB (%6.3f%%)" % (SINAD, SINADP), transform=fig.dpi_scale_trans, fontfamily='monospace')
     t10 = plt.text(11.5, .1, "    SNR: %5.1fdB  ENOB %3.1f" % (SNR, ENOB), transform=fig.dpi_scale_trans, fontfamily='monospace')
-    
+
     t11 = plt.text(11.5, .3, "   Rate: %5.0fHz" % (sRate), transform=fig.dpi_scale_trans, fontfamily='monospace')
 
 #    if imdMode:
 #        t11 = plt.text(9, .5, "IMD: %5.1fdB (%4.2f%%)" % (IMD, IMDP), transform=fig.dpi_scale_trans, fontfamily='monospace')
-#        t12 = plt.text(9, .3, " F1: %5.1fHz" % flist[iifreq[0]], transform=fig.dpi_scale_trans, fontfamily='monospace') 
+#        t12 = plt.text(9, .3, " F1: %5.1fHz" % flist[iifreq[0]], transform=fig.dpi_scale_trans, fontfamily='monospace')
 #        t13 = plt.text(9, .1, " F2: %5.1fHz" % flist[iifreq[1]], transform=fig.dpi_scale_trans, fontfamily='monospace')
-    
+
     plt.pause(.01)
     if ((iCnt == wrCnt) and (picfile != "")):
         plt.savefig("%s_%.0fHz%s" % (picfile, ffreq, picfile_ext))
