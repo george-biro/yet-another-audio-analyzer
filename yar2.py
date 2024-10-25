@@ -209,11 +209,11 @@ def clog(wuni2):
     return 20*np.log10(wuni)
 
 def simSig(sFreq, sNoise, w):
-    r = np.sin(2 * np.pi * sFreq * ts / 1000 + random.random() * np.pi) * w
-    if sNoise > 1e-6:
-            r = r + np.random.normal(scale = sNoise * 20, size = len(r))
+    r = np.sin(2 * np.pi * sFreq * ts / 1000 + random.random() * np.pi)
+    if (sNoise > 1e-6):
+            r = r + np.random.normal(0, sNoise, len(r))
 
-    return r
+    return r * w
 
 #    x = mfund
 #    if cinx > 0:
@@ -369,19 +369,14 @@ ts = np.linspace(0, tmax, chunk)
 
 if args.window == "bartlet":
     win = np.bartlet(chunk)
-    npb = 2
 elif args.window == "blackman":
     win = np.blackman(chunk)
-    npb = 1.73  # 2 ?
 elif args.window == "hamming":
     win = np.hamming(chunk)
-    npb = 1.36
 elif args.window == "hanning":
     win = np.hanning(chunk)
-    npb = 1.5
 else:
     win = np.ones(chunk)
-    npb = 1
 
 csvfile = args.csv 
 
@@ -398,6 +393,8 @@ else:
 pCInx = -1
 inxCnt = 0
 tsStart = time.time()
+
+wrCnt = 10 if doAvg else 3
 
 while (time.time() - tsStart < duration):
    
@@ -425,7 +422,7 @@ while (time.time() - tsStart < duration):
     ax1.set_ylabel('Amplitude (V)')
     ax1.set_xlim(Trange)
     ax1.set_ylim([-Vrange, Vrange])
-    ax1.plot(ts, meas, 'g')
+    ax1.plot(ts, meas, 'r')
     ax1.grid()
 
     # compute furie and the related freq values
@@ -483,7 +480,7 @@ while (time.time() - tsStart < duration):
 #        IMD, IMDP = imd(w2, iifreq[0], iifreq[1])
         
 
-    if ((inxCnt == 10) and (csvfile != "")):
+    if ((inxCnt == wrCnt) and (csvfile != "")):
         f = open(csvfile, "a")
         f.write("%f,%f,%f,%f,%f,%f,%f,%f,%f\n" % (ffreq, THD, THDP, SINAD, SINADP, SNR, ENOB, Vrms, Prms))
 #displaying
@@ -541,7 +538,7 @@ while (time.time() - tsStart < duration):
 #        t13 = plt.text(9, .1, " F2: %5.1fHz" % flist[iifreq[1]], transform=fig.dpi_scale_trans, fontfamily='monospace')
     
     plt.pause(.01)
-    if ((inxCnt == 10) and (picfile != "")):
+    if ((inxCnt == wrCnt) and (picfile != "")):
         plt.savefig("%s_%.0fHz%s" % (picfile, ffreq, picfile_ext))
 
     #if (len(cf) > 0):
