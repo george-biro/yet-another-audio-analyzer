@@ -36,6 +36,7 @@ import argparse
 import os.path
 import random
 
+# display the list of sound device
 def list_sound_devices(audio):
     host = 0
     info = audio.get_host_api_info_by_index(host)
@@ -44,6 +45,12 @@ def list_sound_devices(audio):
         if (audio.get_device_info_by_host_api_device_index(host, i).get('maxInputChannels')) > 0:
             print("Input Device id ", i, " - ", audio.get_device_info_by_host_api_device_index(host, i).get('name'))
 
+# given number is prime
+#
+# param n
+#   input value
+# return
+#   true if the number is prime
 def isPrime(n):
     for i in range(2, int(n**0.5) + 1):
         if (n % i == 0):
@@ -51,6 +58,17 @@ def isPrime(n):
             
     return False
 
+# find pime numbers around a given number
+#
+# To find the bigest smallest prime number and and 
+# smallest greater number. So for exmlpe the call
+#
+# findPrime(9) -> 7,11
+#
+# param n
+#   input value
+# return
+#   returns the two prime numbers
 def findPrime(n):
     for i in range(n-1,0,-1):
         if isPrime(i):
@@ -64,18 +82,33 @@ def findPrime(n):
 
     return plow, phigh
 
+# Compute relative dB value
 def dbRel(k):
     if (k <= 0):
         return float('nan')
     return 20.*math.log10(k)
 
+# Compute power dB value
 def dbPow(k):
     if (k <= 0):
         return float('nan')
     return 10.*math.log10(k)
 
+# Notch filter mask
+#
+# param wc
+#   FFT signal magnitude
+# param lev
+#   requested minimum level
+# return
+#   An mask array, elements where wc is greater than lev
+def notch(wc, lev):
+    rv = np.zeros(len(wc))
+    rv[wc > lev] = 1
+    return rv 
+
 # Determine carrier and harminics
-def carrier(w, num, fm):
+def carrier(w, num, fm, lev):
     cinx = np.argmax(w)
     if cinx < 1:
         j = 1
@@ -84,21 +117,26 @@ def carrier(w, num, fm):
         j = cinx 
         k = num
 
+    mfundamental = notch(w, w[cinx] * lev)
+    mfundamental[w > (w[cinx]  * lev)] = 1
+
     mharmonics = np.zeros(len(w))
     (mharmonics[cinx::j])[:k] = 1
     mharmonics[cinx] = 0
     mharmonics = mharmonics * fm
-    return cinx, mharmonics
+    return cinx, mfundamental, mharmonics
 
-def wclean(ts, win, cfreq):
+def calcFFreq(w, fl, lev):
+    w0 = notch(w, lev) * w
+    return np.sum(w0 * fl) / np.sum(w0)
+
+def wclean(ts, win, cfreq, flev):
     mclean = np.sin(2 * np.pi * cfreq * ts / 1000) * win
     wcc = np.fft.rfft(mclean)
-    return cuni(np.abs(wcc) / len(wcc))
+    wc = cuni(np.abs(wcc) / len(wcc))
+    wc[wc < flev] = 0
+    return wc
 
-def mfund(wc, flev):
-    rv = np.ones(len(wc))
-    rv[wc < flev] = 0
-    return rv 
 
 def rms(meas):
     return (np.sum(np.square(meas)) / len(meas))**0.5
@@ -123,28 +161,27 @@ def thd_ieee(wmagnitude, mharmonics, cinx):
     return dbRel(k), (100.*k)
 
 # same a sinad
-def thdn(wm, mf, fm, cinx):
-    vfundamental = wm[cinx]
-    mnoise = fm - mf
+def thdn(wm, mfd, mfl, fm):
+
+    vfundamental = np.sum(np.square(wm * mfd))
+    mnoise = fm - mfl
     vnoise = np.sum(np.square(wm * mnoise)) 
     
     if (vfundamental < 1e-100):
         return float('nan'), float('nan')
 
-    k = (vnoise**.5) / vfundamental
+    k = (vnoise / vfundamental)**.5
     return dbRel(k), (100.*k)
 
-
-def snr(wm, mf, mh, fm, cinx):
+def snr(wm, mfd, mflt, fm, mh):
     
-    vsignal = wm[cinx]
-    mnoise = fm - mf - mh
+    vsignal = np.sum(np.square(wm * mfd))    
+    mnoise = fm - mflt - mh
     vnoise = np.sum(np.square(wm * mnoise))
-
     if (vnoise < 1e-100):
         return float('nan')
 
-    k = vsignal / (vnoise**0.5)
+    k = (vsignal / vnoise)**.5
     return dbRel(k)
 
 def enob(sinad):
@@ -171,19 +208,23 @@ def clog(wuni2):
     wuni[wuni < 1e-10] = 1e-10
     return 20*np.log10(wuni)
 
+def simSig(sFreq, sNoise, w):
+    r = np.sin(2 * np.pi * sFreq * ts / 1000 + random.random() * np.pi)* w
+    if sNoise > 1e-6:
+            r = r + np.random.normal(scale = sNoise, size = len(r))
 
-def calcFFreq(w, fl, cinx):
-    x = np.zeros(len(w))
-    x[cinx] = 1
-    if cinx > 0:
-        x[cinx - 1] = 1
-    
-    cinxr = cinx + 1
-    if cinxr < len(w):
-        x[cinxr] = 1
+    return r
 
-    y = w * x
-    return np.sum(fl * y) / np.sum(y)
+#    x = mfund
+#    if cinx > 0:
+#        x[cinx - 1] = 1
+#    
+#    cinxr = cinx + 1
+#    if cinxr < len(w):
+#        x[cinxr] = 1
+#
+#    y = w * x
+#    return np.sum(fl * y) / np.sum(y)
 
 def argAdc(args):
     if (args.adcres == 16):
@@ -239,26 +280,26 @@ parser.add_argument("--chunk", type=int, default=32768, help="FFT size")
 parser.add_argument("--skip", type=int, default="1024", help="Skip samples")
 parser.add_argument("--adcrng", type=float, default=100, help="ADC voltage range")
 parser.add_argument("--adcres", type=int, default=32, help="ADC resolution")
-parser.add_argument("--vrange", type=float, default=40, help="Display voltage range")
-parser.add_argument("--frange", type=float, default="40000", help="displayed frequency range")
-parser.add_argument("--trange", type=float, default="10000", help="displayed time range")
+parser.add_argument("--vrange", type=float, default=40, help="Display voltage range in V")
+parser.add_argument("--frange", type=float, default="40000", help="displayed frequency range in Hz")
+parser.add_argument("--trange", type=float, default="100", help="displayed time range in ms")
 parser.add_argument("--wrange", type=float, default="-150", help="FFT range in dB")
-parser.add_argument("--rload", type=float, default=8, help="Load resistor in ohm")
+parser.add_argument("--rload", type=float, default=8, help="Load resistor in Ohm")
 parser.add_argument("--thd", type=int, default=7, help="Number of harmonics for THD calculation")
-parser.add_argument("--duration", type=int, default=240, help="time to exit")
+parser.add_argument("--duration", type=int, default=240, help="time to exit in s")
 parser.add_argument("--plot", type=str, default="", help="plot to file")
 parser.add_argument("--csv", type=str, default="", help="print to csv")
-parser.add_argument("--comment", type=str, default="", help="csv comment")
 parser.add_argument("--window", type=str, default="hanning", help="filtering window")
-parser.add_argument("--simfreq", type=float, default=0, help="Do sumilation with an exact frequency")
+parser.add_argument("--avg", action='store_true', help="Enable avg calculation")
+parser.add_argument("--simfreq", type=float, default=0, help="Do sumilation with an exact frequency in Hz")
 parser.add_argument("--simnoise", type=float, default=-1, help="Do simulation with exact noise (in dB) amplitude")
-parser.add_argument("--comp", type=float, default=0.1, help="Compensation treshold (Hz)")
-parser.add_argument("--avg", action='store_true', help="Disable avg calculation")
-parser.add_argument("--flev", type=float, default=120, help="Notch filter level in dB")
+parser.add_argument("--flttsh", type=float, default=120, help="Notch filter level in dB to skip around the fundamental signal")
+parser.add_argument("--fndtsh", type=float, default=3, help="Filter level to determine the fundamental voltage in dB")
+parser.add_argument("--frqtsh", type=float, default=40, help="Filter level to determine the fundamental frequency in dB")
+parser.add_argument("--cftsh", type=float, default=.25, help="Center frequency treshold in Hz")
 args = parser.parse_args()
 
 doAvg = args.avg
-compTsh = args.comp
 Rload = args.rload
 Vrange = args.vrange   
 Frange = args.frange
@@ -267,8 +308,11 @@ adcRng = args.adcrng    # voltage range of ADC
 thdNum = args.thd       # number of harmonics to be checked
 skip = args.skip
 simFreq = args.simfreq
-simNoise = argNoise(args.simnoise)
-flev = 10**(args.flev / -20)
+simNoise = argNoise(args.simnoise) * 2
+fltTsh = 10**(args.flttsh / -20)
+fndTsh = 10**(args.fndtsh / -20)
+frqTsh = 10**(args.frqtsh / -20)
+cfTsh = args.cftsh
 
 iform, dtype, adcRes = argAdc(args)
 
@@ -276,7 +320,7 @@ chSel = args.chsel
 chNum = args.chnum
 chunk = argFFTsize(args.chunk)      # FFT window size 
 sRate = args.freq  # sampling rate
-duration = max(1, round(args.duration * sRate / chunk))
+duration = args.duration
 dev_index = args.dev    # device index found (see printout)
 
 audio = pyaudio.PyAudio()
@@ -320,7 +364,7 @@ wmagdiv = 0
 
 # Determin Time Range
 tmax = chunk / sRate * 1000.0
-Trange = min(tmax, args.trange) 
+Trange = [ max((tmax - args.trange) * .5, 0), min((tmax + args.trange) * .5, tmax) ]
 ts = np.linspace(0, tmax, chunk) 
 
 if args.window == "bartlet":
@@ -353,14 +397,13 @@ else:
 
 pCInx = -1
 inxCnt = 0
-for xx in range(0, duration):
+tsStart = time.time()
 
+while (time.time() - tsStart < duration):
+   
     # record data chunk
     if stream is None:
-        meas = np.sin(2 * np.pi * simFreq * ts / 1000 + random.random() * np.pi)* win
-        if simNoise > 1e-6:
-            meas = meas + np.random.normal(scale = simNoise * .5, size = len(meas))
-
+        meas = simSig(simFreq, simNoise, win)
     else:
         stream.start_stream()
         data = stream.read(chunk + skip, exception_on_overflow=False)
@@ -380,24 +423,24 @@ for xx in range(0, duration):
     ax1.set_title('Time Domain', loc='left')
     ax1.set_xlabel('Time (ms)')
     ax1.set_ylabel('Amplitude (V)')
-    ax1.set_xlim([0, Trange])
+    ax1.set_xlim(Trange)
     ax1.set_ylim([-Vrange, Vrange])
     ax1.plot(ts, meas, 'g')
     ax1.grid()
 
     # compute furie and the related freq values
     wcomplex = np.fft.rfft(meas) * fmask
-    wmag1 = np.abs(wcomplex) / len(wcomplex)
+    wmag1 = cuni(np.abs(wcomplex) / len(wcomplex))
     if (len(wmag1) != len(flist)):
         print("len(w)%d != len(flist)%d" % (len(wmag1), len(flist)))
         quit()
     
-    cinx, mharmonics = carrier(wmag1, thdNum, fmask)
+    cinx, mfundamental, mharmonics = carrier(wmag1, thdNum, fmask, fndTsh)
     if (np.sum(mharmonics) >= np.sum(fmask)):
         quit()
 
-    cfreq = flist[cinx]                     # center frequency
-    ffreq = calcFFreq(wmag1, flist, cinx)   # fundamental frequency
+    cfreq = flist[cinx]                                   # center frequency
+    ffreq = calcFFreq(wmag1, flist, frqTsh)   # fundamental frequency
     
     if (pCInx == cinx):
         inxCnt = inxCnt + 1
@@ -405,9 +448,10 @@ for xx in range(0, duration):
         inxCnt = 0
     
     pCInx = cinx
-    useCFreq = (abs(ffreq - cfreq) < compTsh)
-    wc = wclean(ts, win, cfreq if useCFreq else ffreq)    
-    mfundamental = mfund(wc, flev) * fmask
+    useCFreq = (abs(ffreq - cfreq) < cfTsh)
+    wc = wclean(ts, win, cfreq if useCFreq else ffreq, fltTsh)    
+    mfilter = notch(wc, 1e-20) * fmask
+
     if doAvg:
         if (inxCnt < 3):
             wmagsum = np.zeros(len(flist))
@@ -415,9 +459,9 @@ for xx in range(0, duration):
 
         wmagsum = wmagsum + wmag1
         wmagdiv = wmagdiv + 1
-        wmagnitude = cuni(wmagsum / wmagdiv)
+        wmagnitude = wmagsum / wmagdiv
     else:
-        wmagnitude = cuni(wmag1)
+        wmagnitude = wmag1
 
     # time domain calculations
     Vpp = np.max(meas) - np.min(meas)
@@ -428,8 +472,8 @@ for xx in range(0, duration):
      # freq domain calculations
 
     THD, THDP = thd_ieee(wmagnitude, mharmonics, cinx)
-    SINAD, SINADP = thdn(wmagnitude, mfundamental, fmask, cinx)
-    SNR = snr(wmagnitude, mfundamental, mharmonics, fmask, cinx)
+    SINAD, SINADP = thdn(wmagnitude, mfundamental, mfilter, fmask)
+    SNR = snr(wmagnitude, mfundamental, mfilter, fmask, mharmonics)
 #    SINAD, SINADP = thdn2(wcomplex, mfundamental, fmask)
 #    SNR = snr2(wcomplex, mfundamental, mharmonics, fmask)
     ENOB = enob(SNR)
