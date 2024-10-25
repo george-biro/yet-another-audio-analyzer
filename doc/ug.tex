@@ -34,7 +34,7 @@ The software will run approx 10 seconds and will create a sim\_1000Hz.png file, 
 \includegraphics[width=\textwidth]{sim_1000Hz.png}
 \section{Explanation of the measurements}
 \subsection{CFreq}
-Center frequency of the greatest FFT component
+Center frequency of the greatest FFT component. The correct THDN results may be reached if the signal generator provides frequencies exactly the same as the provided center frequencies. In case of no match, the system may two (lower and higher) best match.
 \subsection{Base}
 Base or fundamental frequency computed by from the FFT.
 \subsection{Wsize}
@@ -58,16 +58,40 @@ Computed THD-N value
 \subsection{Rate}
 Sampling rate
 \subsection{SNR}
-Computde signal to noise ratio
+Computed signal to noise ratio
+\subsection{ENOB}
+Effective number of bits
 \section{Command line switches}
 \subsection{-h, --help}
 To print help screen
 \subsection{--list}
-To print the list of audio devices. The program exits after all devices are listed
+To print the list of audio devices. The program exits after all devices are listed.
+
+Example:
+\begin{verbatim}
+./yar2.py --list
+Input Device id  0  -  HDA Intel PCH: ALC298 Analog (hw:0,0)
+Input Device id  6  -  E1DA Cosmos ADC PCM32/768: USB Audio (hw:1,0)
+Input Device id  7  -  sysdefault
+Input Device id  13  -  lavrate
+Input Device id  14  -  samplerate
+Input Device id  15  -  speexrate
+Input Device id  16  -  pulse
+Input Device id  17  -  upmix
+Input Device id  18  -  vdownmix
+Input Device id  20  -  default
+\end{verbatim}
 \subsection{--freq NUMBER}
 The hardware sample rate, default is 192000Hz.
 \subsection{--dev NUMBER}
-Device to be used. The --list command displays the possible ids, default is 4. 
+Device to be used. The --list command displays the possible ids, default is 4.
+
+Example:
+\begin{verbatim}
+./yar2 --dev 6
+\end{verbatim}
+\includegraphics[width=\textwidth]{noise.png}
+
 \subsection{--chsel NUMBER}
 The selected channel (e.g. 0 for left side, 1 for right), default is 1.
 \subsection{--chnum NUMBER}
@@ -116,4 +140,42 @@ The fundamental voltage may computed by number of components, default is 3dB.
 To compute the fundamental frequency, the selected in dB strongest components are used.
 \subsection{--cftsh NUMBER}
 For determine the spectral leakage, the system may use fundamental frequency or center frequency of the strongest FFT components.
+\section{Example Use}
+
+\subsection{Apply random frequency}
+
+
+\subsection{Simple Measurement}
+An UNI-T UTG932E Function generator is connected the E1DA Cosmo ADC right cannel. The generator provides 1001.953Hz sinus signal:
+\begin{verbatim}
+./yar2 --dev 6
+\end{verbatim}
+\includegraphics[width=\textwidth]{utg932e_1002Hz.png}
+The green dots are showing the spectral leakage and the values under the green curve is not used for noise SNR and THD-N calculation. The '*' behind the CFreq means that the cenrer freq was used for the ideal sinus instead of the base frequency. 
+
+\subsection{FFT average}
+An UNI-T UTG932E Function generator is connected the E1DA Cosmo ADC right cannel. The generator provides 1001.953Hz sinus signal:
+
+\begin{verbatim}
+./yar2 --dev 6 --avg
+\end{verbatim}
+\includegraphics[width=\textwidth]{utg932e_avg_1002Hz.png}
+The green dots are showing the spectral leakage and the values under the green curve is not used for noise SNR and THD-N calculation. The '*' behind the CFreq means that the cenrer freq was used for the ideal sinus instead of the base frequency. 
+
+\subsection{CSV output}
+An UNI-T UTG932E Function generator is connected the E1DA Cosmo ADC right cannel. The generator provides 404.29688Hz sinus signal.
+\begin{verbatim}
+./yar2 --dev 6 --csv ugt932e.csv
+\end{verbatim}
+After 10 secs the frequency changed to 1001.953Hz.
+\begin{verbatim}
+gbiro@t470s-spring:~/yar$ cat utg932e.csv 
+Carrier,THD,THD DB,THD-N,THD-N DB,SNR,ENOB,Vrms,Prms
+404.301377,-75.515300,0.016758,-67.449184,0.042417,68.186247,11.034260,0.425204,0.022600
+1001.964257,-75.330104,0.017120,-68.066836,0.039506,68.970155,11.164478,0.424833,0.022560
+\end{verbatim}
+
+
+
+
 \end{document}

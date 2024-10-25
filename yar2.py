@@ -391,6 +391,7 @@ csvfile = args.csv
 if (csvfile != "") and (not os.path.isfile(csvfile)):
     f = open(csvfile, 'w+')
     f.write("Carrier,THD,THD DB,THD-N,THD-N DB,SNR,ENOB,Vrms,Prms\n")
+    f.close()
 
 if args.plot != "":
     picfile, picfile_ext = os.path.splitext(args.plot)
@@ -399,7 +400,7 @@ else:
     picfile_ext = ""
 
 pCInx = -1
-inxCnt = 0
+iCnt = 0
 tsStart = time.time()
 
 wrCnt = 10 if doAvg else 3
@@ -448,9 +449,9 @@ while (time.time() - tsStart < duration):
     ffreq = calcFFreq(wmag1, flist, frqTsh)   # fundamental frequency
     
     if (pCInx == cinx):
-        inxCnt = inxCnt + 1
+        iCnt = iCnt + 1
     else:
-        inxCnt = 0
+        iCnt = 0
     
     pCInx = cinx
     useCFreq = (abs(ffreq - cfreq) < cfTsh)
@@ -458,7 +459,7 @@ while (time.time() - tsStart < duration):
     mfilter = notch(wc, 1e-20) * fmask
 
     if doAvg:
-        if (inxCnt < 3):
+        if (iCnt < 3):
             wmagsum = np.zeros(len(flist))
             wmagdiv = 0
 
@@ -486,11 +487,12 @@ while (time.time() - tsStart < duration):
 #    imdMode = checkImd(iifreq)
 #    if imdMode:
 #        IMD, IMDP = imd(w2, iifreq[0], iifreq[1])
-        
 
-    if ((inxCnt == wrCnt) and (csvfile != "")):
+    if ((iCnt == wrCnt) and (csvfile != "")):
+        print("write file %s" % csvfile)
         f = open(csvfile, "a")
         f.write("%f,%f,%f,%f,%f,%f,%f,%f,%f\n" % (ffreq, THD, THDP, SINAD, SINADP, SNR, ENOB, Vrms, Prms))
+        f.close()
 #displaying
     # manage axles
     ax2.cla()
@@ -546,8 +548,9 @@ while (time.time() - tsStart < duration):
 #        t13 = plt.text(9, .1, " F2: %5.1fHz" % flist[iifreq[1]], transform=fig.dpi_scale_trans, fontfamily='monospace')
     
     plt.pause(.01)
-    if ((inxCnt == wrCnt) and (picfile != "")):
+    if ((iCnt == wrCnt) and (picfile != "")):
         plt.savefig("%s_%.0fHz%s" % (picfile, ffreq, picfile_ext))
+
 
     #if (len(cf) > 0):
     t0.remove()
