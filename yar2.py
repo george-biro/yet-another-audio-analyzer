@@ -209,9 +209,9 @@ def clog(wuni2):
     return 20*np.log10(wuni)
 
 def simSig(sFreq, sNoise, w):
-    r = np.sin(2 * np.pi * sFreq * ts / 1000 + random.random() * np.pi)* w
+    r = np.sin(2 * np.pi * sFreq * ts / 1000 + random.random() * np.pi) * w
     if sNoise > 1e-6:
-            r = r + np.random.normal(scale = sNoise, size = len(r))
+            r = r + np.random.normal(scale = sNoise * 20, size = len(r))
 
     return r
 
@@ -308,7 +308,7 @@ adcRng = args.adcrng    # voltage range of ADC
 thdNum = args.thd       # number of harmonics to be checked
 skip = args.skip
 simFreq = args.simfreq
-simNoise = argNoise(args.simnoise) * 2
+simNoise = argNoise(args.simnoise) 
 fltTsh = 10**(args.flttsh / -20)
 fndTsh = 10**(args.fndtsh / -20)
 frqTsh = 10**(args.frqtsh / -20)
