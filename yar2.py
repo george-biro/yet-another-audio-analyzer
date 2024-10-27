@@ -52,43 +52,6 @@ def list_sound_devices(audio):
         if (audio.get_device_info_by_host_api_device_index(host, i).get('maxInputChannels')) > 0:
             print("Input Device id ", i, " - ", audio.get_device_info_by_host_api_device_index(host, i).get('name'))
 
-# given number is prime
-#
-# param n
-#   input value
-# return
-#   true if the number is prime
-def isPrime(n):
-    for i in range(2, int(n**0.5) + 1):
-        if (n % i == 0):
-            return True
-
-    return False
-
-# find pime numbers around a given number
-#
-# To find the bigest smallest prime number and and
-# smallest greater number. So for exmlpe the call
-#
-# findPrime(9) -> 7,11
-#
-# param n
-#   input value
-# return
-#   returns the two prime numbers
-def findPrime(n):
-    for i in range(n-1,0,-1):
-        if isPrime(i):
-            plow = i
-            break
-
-    for i in range(n+1, n+100):
-        if isPrime(i):
-            phigh = i
-            break
-
-    return plow, phigh
-
 # Compute relative dB value
 def dbRel(k):
     if (k <= 0):
@@ -225,6 +188,32 @@ def simSig(sFreq, sNoise, w):
 
     return r * w
 
+def isPrime(n):
+    if (n % 2) == 0 and n > 2: 
+        return False
+    return all((n % i) for i in range(3, int(math.sqrt(n)) + 1, 2))
+
+def primeList(fl, m):
+    rv = np.zeros(len(fl))
+    j = 0
+    for i in range(3, len(fl)):
+        if m[i] > .5 and isPrime(i):
+            rv[j] = fl[i]
+            j = j + 1
+
+    return np.resize(rv, j)
+
+def bestFreq(plist, freq):
+    i = np.argmin(np.abs(plist - freq))
+    a = [ i - 50, i - 20, i - 10, i - 5, i, i + 5, i + 10, i + 20, i + 50 ]
+    for i in range(len(a)):
+        if a[i] < 0:
+            a[i] = 0
+        elif a[i] >= len(plist):
+            a[i] = len(plist) - 1
+
+    return np.take(plist, a)
+
 #    x = mfund
 #    if cinx > 0:
 #        x[cinx - 1] = 1
@@ -352,7 +341,7 @@ def on_close(event):
     print("on close")
     quit()
 
-fig, (skip0, ax1, skip1, ax2, skip2) = plt.subplots(5,1,figsize=(16,9), gridspec_kw={'height_ratios': [.1, 2, .01, 6, .3]})
+fig, (skip0, ax1, skip1, ax2, skip2) = plt.subplots(5,1,figsize=(16,9), gridspec_kw={'height_ratios': [.1, 2, .01, 6, .5]})
 #fig.canvas.mpl_connect('key_press_event', on_press)
 fig.canvas.mpl_connect('close_event', on_close)
 
@@ -369,6 +358,7 @@ FrangeLow = 20
 fmask = np.zeros(len(flist))
 ilist = [ ifind(flist, FrangeLow), ifind(flist, Frange) ]
 fmask[ilist[0]:ilist[1]] = 1
+plist = primeList(flist, fmask) 
 wmagsum = np.zeros(len(flist))
 wmagdiv = 0
 
@@ -456,8 +446,8 @@ while (time.time() - tsStart < duration):
         iCnt = 0
 
     pCInx = cinx
-    useCFreq = (abs(ffreq - cfreq) < cfTsh)
-    wc = wclean(ts, win, cfreq if useCFreq else ffreq, fltTsh)
+    wcFreq = cfreq if (abs(ffreq - cfreq) < cfTsh) else ffreq
+    wc = wclean(ts, win, wcFreq, fltTsh)
     mfilter = notch(wc, 1e-20) * fmask
 
     if doAvg:
@@ -513,59 +503,30 @@ while (time.time() - tsStart < duration):
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
     ax2.grid()
 
-    mul = math.floor(sRate / cfreq + .5)
-    if isPrime(mul):
-        ch = '*' if useCFreq else ' '
-        t12 = plt.text(.5, .5, "CFreq: %10.5fHz%c" %
-                (cfreq, ch), transform=fig.dpi_scale_trans, fontfamily='monospace')
-    else:
-        pl, ph = findPrime(mul)
-        fl = cfreq * float(pl) / float(mul)
-        fh = cfreq * float(ph) / float(mul)
-        t12 = plt.text(.5, .5, "CFreq: %10.5fHz or %10.5fHz" % (fl, fh), transform=fig.dpi_scale_trans, fontfamily='monospace')
+    bFreq = bestFreq(plist, ffreq)
+    t = []
+    for i in range(len(bFreq)):
+        c = '*' if abs(wcFreq - bFreq[i]) < 1e-6 else ' '
+        t.append(plt.text(.5 + 1.5*i, .5, "%10.5fHz%c" % (bFreq[i], c), 
+                transform=fig.dpi_scale_trans, fontfamily='monospace', style='italic'))
 
-    t0 = plt.text(.5, .3, "Base : %10.5fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace')
-    t7 = plt.text(.5, .1, "Wsize: %5d#" % chunk, transform=fig.dpi_scale_trans, fontfamily='monospace')
-    t1 = plt.text(2.5, .3, "   Vpp: %5.1fV" % Vpp, transform=fig.dpi_scale_trans,  fontfamily='monospace')
-    t2 = plt.text(2.5, .1, " Ppeak: %5.1fW" % Ppeak, transform=fig.dpi_scale_trans,  fontfamily='monospace')
-
-    t3 = plt.text(4.5, .3, "  Eff: %5.1fV" % Vrms, transform=fig.dpi_scale_trans, fontfamily='monospace')
-    t4 = plt.text(4.5, .1, "E Pwr: %5.1fW" % Prms, transform=fig.dpi_scale_trans, fontfamily='monospace')
-
-    t5 = plt.text(6.5, .3,  "Range: %3.1fV" % Vrange, transform=fig.dpi_scale_trans, fontfamily='monospace')
-    t6 = plt.text(6.5, .1,  " Load: %3.1fohm" % Rload, transform=fig.dpi_scale_trans, fontfamily='monospace')
-    t8 = plt.text(8.5, .3, "THD(%02d): %5.1fdB (%6.3f%%)" % (thdNum, THD, THDP), transform=fig.dpi_scale_trans, fontfamily='monospace')
-    t9 = plt.text(8.5, .1, "  THD-N: %5.1fdB (%6.3f%%)" % (SINAD, SINADP), transform=fig.dpi_scale_trans, fontfamily='monospace')
-    t10 = plt.text(11.5, .1, "    SNR: %5.1fdB  ENOB %3.1f" % (SNR, ENOB), transform=fig.dpi_scale_trans, fontfamily='monospace')
-
-    t11 = plt.text(11.5, .3, "   Rate: %5.0fHz" % (sRate), transform=fig.dpi_scale_trans, fontfamily='monospace')
-
-#    if imdMode:
-#        t11 = plt.text(9, .5, "IMD: %5.1fdB (%4.2f%%)" % (IMD, IMDP), transform=fig.dpi_scale_trans, fontfamily='monospace')
-#        t12 = plt.text(9, .3, " F1: %5.1fHz" % flist[iifreq[0]], transform=fig.dpi_scale_trans, fontfamily='monospace')
-#        t13 = plt.text(9, .1, " F2: %5.1fHz" % flist[iifreq[1]], transform=fig.dpi_scale_trans, fontfamily='monospace')
+    t.append(plt.text(.5, .3, "Base : %10.5fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
+    t.append(plt.text(.5, .1, "Wsize: %5d#" % chunk, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
+    t.append(plt.text(2.5, .3, "   Vpp: %5.1fV" % Vpp, transform=fig.dpi_scale_trans,  fontfamily='monospace', weight='bold'))
+    t.append(plt.text(2.5, .1, " Ppeak: %5.1fW" % Ppeak, transform=fig.dpi_scale_trans,  fontfamily='monospace', weight='bold'))
+    t.append(plt.text(4.5, .3, "  Eff: %5.1fV" % Vrms, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
+    t.append(plt.text(4.5, .1, "E Pwr: %5.1fW" % Prms, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
+    t.append(plt.text(6.5, .3,  "Range: %3.1fV" % Vrange, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
+    t.append(plt.text(6.5, .1,  " Load: %3.1fohm" % Rload, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
+    t.append(plt.text(8.5, .3, "THD(%02d): %5.1fdB (%6.3f%%)" % (thdNum, THD, THDP), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
+    t.append(plt.text(8.5, .1, "  THD-N: %5.1fdB (%6.3f%%)" % (SINAD, SINADP), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
+    t.append(plt.text(11.5, .1, "    SNR: %5.1fdB  ENOB %3.1f" % (SNR, ENOB), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
+    t.append(plt.text(11.5, .3, "   Rate: %5.0fHz" % (sRate), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
 
     plt.pause(.01)
     if ((iCnt == wrCnt) and (picfile != "")):
         plt.savefig("%s_%.0fHz%s" % (picfile, ffreq, picfile_ext))
 
-
-    #if (len(cf) > 0):
-    t0.remove()
-    t1.remove()
-    t2.remove()
-    t3.remove()
-    t4.remove()
-    t5.remove()
-    t6.remove()
-    t7.remove()
-    t8.remove()
-    t9.remove()
-    t10.remove()
-    t11.remove()
-    t12.remove()
-#    if imdMode:
-#        t11.remove()
-#        t12.remove()
-#        t13.remove()
+    for i in t:
+        i.remove()
 
