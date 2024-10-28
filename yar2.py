@@ -382,7 +382,7 @@ csvfile = args.csv
 
 if (csvfile != "") and (not os.path.isfile(csvfile)):
     with open(csvfile, 'w+') as f:
-        f.write("Carrier,THD,THD DB,THD-N,THD-N DB,SNR,ENOB,Vrms,Prms\n")
+        f.write("Carrier,THD DB,THD,THD-N DB,THD-N,SNR,ENOB,Vrms,Prms\n")
         f.close()
 
 if args.plot != "":
