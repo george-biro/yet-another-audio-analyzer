@@ -511,7 +511,7 @@ while (time.time() - tsStart < duration):
                 transform=fig.dpi_scale_trans, fontfamily='monospace', style='italic'))
 
     t.append(plt.text(.5, .3, "Base : %10.5fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
-    t.append(plt.text(.5, .1, "Wsize: %5d#" % chunk, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
+    t.append(plt.text(.5, .1, "#W/sr: %5d#/%4.1fkHz" % (chunk, sRate * 1e-3), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
     t.append(plt.text(2.5, .3, "   Vpp: %5.1fV" % Vpp, transform=fig.dpi_scale_trans,  fontfamily='monospace', weight='bold'))
     t.append(plt.text(2.5, .1, " Ppeak: %5.1fW" % Ppeak, transform=fig.dpi_scale_trans,  fontfamily='monospace', weight='bold'))
     t.append(plt.text(4.5, .3, "  Eff: %5.1fV" % Vrms, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
@@ -521,7 +521,6 @@ while (time.time() - tsStart < duration):
     t.append(plt.text(8.5, .3, "THD(%02d): %5.1fdB (%6.3f%%)" % (thdNum, THD, THDP), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
     t.append(plt.text(8.5, .1, "  THD-N: %5.1fdB (%6.3f%%)" % (SINAD, SINADP), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
     t.append(plt.text(11.5, .1, "    SNR: %5.1fdB  ENOB %3.1f" % (SNR, ENOB), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
-    t.append(plt.text(11.5, .3, "   Rate: %5.0fHz" % (sRate), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
 
     plt.pause(.01)
     if ((iCnt == wrCnt) and (picfile != "")):
