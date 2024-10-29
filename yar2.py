@@ -66,6 +66,9 @@ def dbPow(k):
     
     return 10.*math.log10(k)
 
+def fromDb(d):
+    return 10.**(d / 20.)
+
 # Notch filter mask
 #
 # param wc
@@ -108,7 +111,6 @@ def wclean(ts, win, cfreq, flev):
     wc = cuni(np.abs(wcc) / len(wcc))
     wc[wc < flev] = 0
     return wc
-
 
 def rms(meas):
     return (np.sum(np.square(meas)) / len(meas))**0.5
@@ -270,6 +272,7 @@ parser = argparse.ArgumentParser(
                     prog='Yet another Audio analisator',
                     usage='%(prog)s [options]',
                     formatter_class=CustomHelpFormatter)
+
 parser.add_argument("--list", action='store_true')
 parser.add_argument("--freq", type=int, default=192000, help="Sample rate")
 parser.add_argument("--dev", type=int, default=4, help="Id of sound device")
@@ -308,9 +311,9 @@ thdNum = args.thd       # number of harmonics to be checked
 skip = args.skip
 simFreq = args.simfreq
 simNoise = argNoise(args.simnoise)
-fltTsh = 10**(args.flttsh / -20)
-fndTsh = 10**(args.fndtsh / -20)
-frqTsh = 10**(args.frqtsh / -20)
+fltTsh = fromDb(-args.flttsh)
+fndTsh = fromDb(-args.fndtsh)
+frqTsh = fromDb(-args.frqtsh)
 cfTsh = args.cftsh
 
 iform, dtype, adcRes = argAdc(args)
