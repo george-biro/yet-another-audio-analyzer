@@ -1,1 +1,1 @@
-The yet another audio analyzer (yar) to do different measurements based on FFT using the sound layer. The software was tested by the E1DA ADC device (see https://e1dashz.wixsite.com/index/cosmos-adc), which has an 32 bits ADC and sampling up to 768kHz.
+To do measurements baded on FFT using the sound layer. The software was tested by the E1DA Cosmo ADC device (see https://e1dashz.wixsite.com/index/cosmos-adc).
