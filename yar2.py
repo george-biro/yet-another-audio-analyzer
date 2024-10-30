@@ -39,6 +39,7 @@ import time
 import math
 import random
 import matplotlib.pyplot as plt
+from matplotlib.ticker import EngFormatter
 import numpy as np
 import pyaudio
 # import sounddevice as sd
@@ -106,7 +107,7 @@ def calcFFreq(w, fl, lev):
     return np.sum(w0 * fl) / np.sum(w0)
 
 def wclean(ts, win, cfreq, flev):
-    mclean = np.sin(2 * np.pi * cfreq * ts / 1000) * win
+    mclean = np.sin(2 * np.pi * cfreq * ts) * win
     wcc = np.fft.rfft(mclean)
     wc = cuni(np.abs(wcc) / len(wcc))
     wc[wc < flev] = 0
@@ -184,7 +185,7 @@ def clog(wuni2):
     return 20*np.log10(wuni)
 
 def simSig(sFreq, sNoise, w):
-    r = np.sin(2 * np.pi * sFreq * ts / 1000 + random.random() * np.pi)
+    r = np.sin(2 * np.pi * sFreq * ts + random.random() * np.pi)
     if (sNoise > 1e-6):
         r = r + np.random.normal(0, sNoise, len(r))
 
@@ -283,7 +284,7 @@ parser.add_argument("--skip", type=int, default="1024", help="Skip samples")
 parser.add_argument("--adcrng", type=float, default=100, help="ADC voltage range")
 parser.add_argument("--adcres", type=int, default=32, help="ADC resolution")
 parser.add_argument("--vrange", type=float, default=40, help="Display voltage range in V")
-parser.add_argument("--frange", type=float, default="40000", help="displayed frequency range in Hz")
+parser.add_argument("--frange", type=float, default="50000", help="displayed frequency range in Hz")
 parser.add_argument("--trange", type=float, default="100", help="displayed time range in ms")
 parser.add_argument("--wrange", type=float, default="-150", help="FFT range in dB")
 parser.add_argument("--rload", type=float, default=8, help="Load resistor in Ohm")
@@ -303,9 +304,9 @@ args = parser.parse_args()
 
 doAvg = args.avg
 Rload = args.rload
-Vrange = args.vrange
-Frange = args.frange
-Wrange = args.wrange
+Vrange = [ -args.vrange, args.vrange ]
+Frange = [ 10 , args.frange ]
+Wrange = [ args.wrange, 0 ]
 adcRng = args.adcrng    # voltage range of ADC
 thdNum = args.thd       # number of harmonics to be checked
 skip = args.skip
@@ -350,24 +351,23 @@ fig.canvas.mpl_connect('close_event', on_close)
 
 fig.suptitle('Yet another Audio analyseR')
 fig.tight_layout()
-fig.subplots_adjust(left=.05, bottom=None, right=None, top=None, wspace=None, hspace=None)
+fig.subplots_adjust(left=.06, bottom=None, right=None, top=None, wspace=None, hspace=None)
 skip0.axis("off")
 skip1.axis("off")
 skip2.axis("off")
 
 flist = abs(np.fft.rfftfreq(chunk) * sRate)
 # Determine Audio Range
-FrangeLow = 20
 fmask = np.zeros(len(flist))
-ilist = [ ifind(flist, FrangeLow), ifind(flist, Frange) ]
+ilist = [ ifind(flist, Frange[0]), ifind(flist, Frange[1]) ]
 fmask[ilist[0]:ilist[1]] = 1
 plist = primeList(flist, fmask) 
 wmagsum = np.zeros(len(flist))
 wmagdiv = 0
 
 # Determin Time Range
-tmax = chunk / sRate * 1000.0
-Trange = [ max((tmax - args.trange) * .5, 0), min((tmax + args.trange) * .5, tmax) ]
+tmax = chunk / sRate
+Trange = [ max((tmax - args.trange * 1e-3) * .5, 0), min((tmax + args.trange * 1e-3) * .5, tmax) ]
 ts = np.linspace(0, tmax, chunk)
 
 if args.window == "bartlet":
@@ -400,6 +400,11 @@ tsStart = time.time()
 
 wrCnt = 10 if doAvg else 3
 
+formatterS = EngFormatter(unit='s')
+formatterV = EngFormatter(unit='V')
+formatterHz = EngFormatter(unit='Hz')
+formatterDb = EngFormatter(unit='dB')
+
 while (time.time() - tsStart < duration):
 
     # record data chunk
@@ -422,10 +427,12 @@ while (time.time() - tsStart < duration):
 
     ax1.cla()
     ax1.set_title('Time Domain', loc='left')
-    ax1.set_xlabel('Time (ms)')
-    ax1.set_ylabel('Amplitude (V)')
+#    ax1.set_xlabel('Time')
+#    ax1.set_ylabel('Amplitude')
     ax1.set_xlim(Trange)
-    ax1.set_ylim([-Vrange, Vrange])
+    ax1.xaxis.set_major_formatter(formatterS)
+    ax1.set_ylim(Vrange)
+    ax1.yaxis.set_major_formatter(formatterV)
     ax1.plot(ts, meas, 'r')
     ax1.grid()
 
@@ -492,12 +499,14 @@ while (time.time() - tsStart < duration):
     # manage axles
     ax2.cla()
     ax2.set_title('Frequency Domain', loc='left')
-    ax2.set_xlabel('Frequency (Hz)')
-    ax2.set_ylabel('Amplitude (dB)')
-    ax2.set_xlim([FrangeLow, Frange])
-
+#    ax2.set_xlabel('Frequency')
+#    ax2.set_ylabel('Amplitude')
     ax2.set_xscale("log")
-    ax2.set_ylim([Wrange, 0])
+    
+    ax2.set_xlim(Frange)
+    ax2.xaxis.set_major_formatter(formatterHz)
+    ax2.set_ylim(Wrange)
+    ax2.yaxis.set_major_formatter(formatterDb)
 
     ax2.plot(flist[ilist[0]:ilist[1]], clog(wmagnitude[ilist[0]:ilist[1]]), 'b-')
     if wc is not None:
@@ -519,7 +528,7 @@ while (time.time() - tsStart < duration):
     t.append(plt.text(2.5, .1, " Ppeak: %5.1fW" % Ppeak, transform=fig.dpi_scale_trans,  fontfamily='monospace', weight='bold'))
     t.append(plt.text(4.5, .3, "  Eff: %5.1fV" % Vrms, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
     t.append(plt.text(4.5, .1, "E Pwr: %5.1fW" % Prms, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
-    t.append(plt.text(6.5, .3,  "Range: %3.1fV" % Vrange, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
+    t.append(plt.text(6.5, .3,  "Range: %3.1fV" % Vrange[1], transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
     t.append(plt.text(6.5, .1,  " Load: %3.1fohm" % Rload, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
     t.append(plt.text(8.5, .3, "THD(%02d): %5.1fdB (%6.3f%%)" % (thdNum, THD, THDP), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
     t.append(plt.text(8.5, .1, "  THD-N: %5.1fdB (%6.3f%%)" % (SINAD, SINADP), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
