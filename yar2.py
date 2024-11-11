@@ -102,6 +102,9 @@ def carrier(w, num, fm, lev):
     mharmonics = mharmonics * fm
     return cinx, mfundamental, mharmonics
 
+def hlist(w, f, inx, num):
+    return (w[inx::inx])[:num], (f[inx::inx])[:num]
+
 def calcFFreq(w, fl, lev):
     w0 = notch(w, lev) * w
     return np.sum(w0 * fl) / np.sum(w0)
@@ -447,7 +450,7 @@ while (time.time() - tsStart < duration):
     if (np.sum(mharmonics) >= np.sum(fmask)):
         quit()
 
-    cfreq = flist[cinx]                                   # center frequency
+    cfreq = flist[cinx]                       # center frequency
     ffreq = calcFFreq(wmag1, flist, frqTsh)   # fundamental frequency
 
     if (pCInx == cinx):
@@ -507,10 +510,18 @@ while (time.time() - tsStart < duration):
     ax2.xaxis.set_major_formatter(formatterHz)
     ax2.set_ylim(Wrange)
     ax2.yaxis.set_major_formatter(formatterDb)
-
     ax2.plot(flist[ilist[0]:ilist[1]], clog(wmagnitude[ilist[0]:ilist[1]]), 'b-')
     if wc is not None:
         ax2.plot(flist[ilist[0]:ilist[1]], clog(wc[ilist[0]:ilist[1]]), 'g.')
+
+    for i in range(1, 1 + thdNum):
+        cinxi = cinx * i
+        ty = wmagnitude[cinxi]
+        if (ty > 1e-10):
+            tyd = 20*math.log10(ty)
+            if (tyd > Wrange[0]):
+                ax2.text(flist[cinxi], tyd, "%d" % i, horizontalalignment='center', verticalalignment='bottom', color='c', fontstyle='italic')
+    
 
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
     ax2.grid()
