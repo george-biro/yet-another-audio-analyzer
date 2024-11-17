@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 #
-# Yet Another audio analyzeR
+# Yet Another Audio analyzeR
 #
 # Copyright 2024 George Biro
 #
@@ -273,7 +273,7 @@ class CustomHelpFormatter(argparse.HelpFormatter):
 
 # Begin of the program
 parser = argparse.ArgumentParser(
-                    prog='Yet another Audio analisator',
+                    prog='Yet Another Audio Analyzer',
                     usage='%(prog)s [options]',
                     formatter_class=CustomHelpFormatter)
 
