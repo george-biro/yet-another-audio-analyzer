@@ -57,14 +57,14 @@ def list_sound_devices(audio):
 def dbRel(k):
     if (k <= 0):
         return float('nan')
-    
+
     return 20.*math.log10(k)
 
 # Compute power dB value
 def dbPow(k):
     if (k <= 0):
         return float('nan')
-    
+
     return 10.*math.log10(k)
 
 def fromDb(d):
@@ -195,7 +195,7 @@ def simSig(sFreq, sNoise, w):
     return r * w
 
 def isPrime(n):
-    if (n % 2) == 0 and n > 2: 
+    if (n % 2) == 0 and n > 2:
         return False
     return all((n % i) for i in range(3, int(math.sqrt(n)) + 1, 2))
 
@@ -287,7 +287,7 @@ parser.add_argument("--skip", type=int, default="1024", help="Skip samples")
 parser.add_argument("--adcrng", type=float, default=100, help="ADC voltage range")
 parser.add_argument("--adcres", type=int, default=32, help="ADC resolution")
 parser.add_argument("--vrange", type=float, default=40, help="Display voltage range in V")
-parser.add_argument("--frange", type=float, default="50000", help="displayed frequency range in Hz")
+parser.add_argument("--frange", type=float, default="70000", help="displayed frequency range in Hz")
 parser.add_argument("--trange", type=float, default="100", help="displayed time range in ms")
 parser.add_argument("--wrange", type=float, default="-150", help="FFT range in dB")
 parser.add_argument("--rload", type=float, default=8, help="Load resistor in Ohm")
@@ -364,7 +364,7 @@ flist = abs(np.fft.rfftfreq(chunk) * sRate)
 fmask = np.zeros(len(flist))
 ilist = [ ifind(flist, Frange[0]), ifind(flist, Frange[1]) ]
 fmask[ilist[0]:ilist[1]] = 1
-plist = primeList(flist, fmask) 
+plist = primeList(flist, fmask)
 wmagsum = np.zeros(len(flist))
 wmagdiv = 0
 
@@ -505,7 +505,7 @@ while (time.time() - tsStart < duration):
 #    ax2.set_xlabel('Frequency')
 #    ax2.set_ylabel('Amplitude')
     ax2.set_xscale("log")
-    
+
     ax2.set_xlim(Frange)
     ax2.xaxis.set_major_formatter(formatterHz)
     ax2.set_ylim(Wrange)
@@ -517,12 +517,13 @@ while (time.time() - tsStart < duration):
     if (cinx > 0):
         for i in range(1, 1 + thdNum):
             cinxi = cinx * i
-            ty = wmagnitude[cinxi]
-            if (ty > 1e-10):
-                tyd = 20*math.log10(ty)
-                if (tyd > Wrange[0]):
-                    ax2.text(flist[cinxi], tyd, "%d" % i, horizontalalignment='center', verticalalignment='bottom', color='c', fontstyle='italic')
-    
+            if (cinxi < len(wmagnitude)):
+                ty = wmagnitude[cinxi]
+                if (ty > 1e-10):
+                    tyd = 20*math.log10(ty)
+                    if (tyd > Wrange[0]):
+                        ax2.text(flist[cinxi], tyd, "%d" % i, horizontalalignment='center', verticalalignment='bottom', color='c', fontstyle='italic')
+
 
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
     ax2.grid()
@@ -531,7 +532,7 @@ while (time.time() - tsStart < duration):
     t = []
     for i in range(len(bFreq)):
         c = '*' if abs(wcFreq - bFreq[i]) < 1e-6 else ' '
-        t.append(plt.text(.5 + 1.5*i, .5, "%10.5fHz%c" % (bFreq[i], c), 
+        t.append(plt.text(.5 + 1.5*i, .5, "%10.5fHz%c" % (bFreq[i], c),
                 transform=fig.dpi_scale_trans, fontfamily='monospace', style='italic'))
 
     t.append(plt.text(.5, .3, "Base : %10.5fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
