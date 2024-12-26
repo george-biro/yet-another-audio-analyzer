@@ -514,13 +514,15 @@ while (time.time() - tsStart < duration):
     if wc is not None:
         ax2.plot(flist[ilist[0]:ilist[1]], clog(wc[ilist[0]:ilist[1]]), 'g.')
 
-    for i in range(1, 1 + thdNum):
-        cinxi = cinx * i
-        ty = wmagnitude[cinxi]
-        if (ty > 1e-10):
-            tyd = 20*math.log10(ty)
-            if (tyd > Wrange[0]):
-                ax2.text(flist[cinxi], tyd, "%d" % i, horizontalalignment='center', verticalalignment='bottom', color='c', fontstyle='italic')
+    if (cinx > 0):
+        for i in range(1, 1 + thdNum):
+            cinxi = cinx * i
+            if (cinxi < len(wmagnitude)):
+                ty = wmagnitude[cinxi]
+                if (ty > 1e-10):
+                    tyd = 20*math.log10(ty)
+                    if (tyd > Wrange[0]):
+                        ax2.text(flist[cinxi], tyd, "%d" % i, horizontalalignment='center', verticalalignment='bottom', color='c', fontstyle='italic')
     
 
 # ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
