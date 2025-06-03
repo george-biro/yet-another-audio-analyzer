@@ -53,6 +53,13 @@ def list_sound_devices(audio):
         if (audio.get_device_info_by_host_api_device_index(host, i).get('maxInputChannels')) > 0:
             print("Input Device id ", i, " - ", audio.get_device_info_by_host_api_device_index(host, i).get('name'))
 
+def riaaDb(x):
+    t1=75e-6
+    t2=318e-6
+    t3=3180e-6
+    w=x*3.14159265359*2
+    return 10.*math.log10(1 + 1 / ((w*t2)**2)) - 10.*math.log10(1 + 1 / ((w*t1)**2)) - 10.*math.log10(1 + (w*t3)**2)
+
 # Compute relative dB value
 def dbRel(k):
     if (k <= 0):
@@ -210,8 +217,12 @@ def primeList(fl, m):
     return np.resize(rv, j)
 
 def bestFreq(plist, freq):
-    i = np.argmin(np.abs(plist - freq))
-    a = [ i - 50, i - 20, i - 10, i - 5, i, i + 5, i + 10, i + 20, i + 50 ]
+    j01 = np.argmin(np.abs(plist - freq * .1))
+    j05 = np.argmin(np.abs(plist - freq * .5))
+    j = np.argmin(np.abs(plist - freq))
+    j2 = np.argmin(np.abs(plist - freq * 2.))
+    j10 = np.argmin(np.abs(plist - freq * 10.))
+    a = [ j01, j05, j, j2, j10 ]
     for i in range(len(a)):
         if a[i] < 0:
             a[i] = 0
@@ -408,6 +419,8 @@ formatterV = EngFormatter(unit='V')
 formatterHz = EngFormatter(unit='Hz')
 formatterDb = EngFormatter(unit='dB')
 
+riaa1000 = riaaDb(1000)
+
 while (time.time() - tsStart < duration):
 
     # record data chunk
@@ -531,8 +544,9 @@ while (time.time() - tsStart < duration):
     t = []
     for i in range(len(bFreq)):
         c = '*' if abs(wcFreq - bFreq[i]) < 1e-6 else ' '
-        t.append(plt.text(.5 + 1.5*i, .5, "%10.5fHz%c" % (bFreq[i], c),
+        t.append(plt.text(.5 + 1.5*i, .5, "%10.5fHz%c" % (bFreq[i], c, ),
                 transform=fig.dpi_scale_trans, fontfamily='monospace', style='italic'))
+        print("%10.5fHz %.1fmV" % (bFreq[i], 2.5*10**((riaaDb(bFreq[i]) - riaa1000) / 20)))
 
     t.append(plt.text(.5, .3, "Base : %10.5fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
     t.append(plt.text(.5, .1, "#W/sr: %5d#/%4.1fkHz" % (chunk, sRate * 1e-3), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
