@@ -1,4 +1,4 @@
-#! /usr/bin/python3
+#! python
 #
 # Yet Another Audio analyzeR
 #
@@ -346,10 +346,23 @@ if args.list:
     quit()
 
 # create pyaudio stream
+stream = None
 if (dev_index >= 0) and (simFreq < .01):
-    stream = audio.open(format = iform,rate = sRate,channels = chNum, input_device_index = dev_index,input = True, frames_per_buffer=chunk+skip)
-else:
-    stream = None
+    try:
+        device_info = audio.get_device_info_by_index(dev_index)
+        max_channels = device_info.get('maxInputChannels')
+        
+        if chNum > max_channels:
+            print(f"Warning: Device '{device_info.get('name')}' only supports {max_channels} input channel(s).")
+            print(f"         You requested {chNum}. Adjusting to {max_channels} channel(s).")
+            chNum = int(max_channels) # Make sure it's an integer
+
+        stream = audio.open(format = iform,rate = sRate,channels = chNum, input_device_index = dev_index,input = True, frames_per_buffer=chunk+skip)
+
+    except (ValueError, IOError) as e:
+        print(f"Error opening audio device {dev_index}: {e}")
+        print("Please check your audio devices using the --list flag.")
+        quit()
 
 def on_press(event):
     print("on press")
