@@ -696,15 +696,17 @@ def main() -> int:
     db_range = [args.wrange, 0.0]
 
     audio = pyaudio.PyAudio()
-    device_id = get_coreaudio_device_id(audio, cfg.device_index)
-    disable_voice_processing(device_id)
-    disable_safety_offset(device_id)
-    enable_pro_audio_mode(device_id)
+    stream = None
     
     try:
         if args.list:
             list_sound_devices(audio)
             return 0
+
+        device_id = get_coreaudio_device_id(audio, cfg.device_index)
+        disable_voice_processing(device_id)
+        disable_safety_offset(device_id)
+        enable_pro_audio_mode(device_id)
 
         window = get_window(cfg.window_name, cfg.chunk)
         init_csv(args.csv)

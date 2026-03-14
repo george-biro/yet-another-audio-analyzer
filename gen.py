@@ -6,6 +6,7 @@ import numpy as np
 import pyaudio
 import signal
 import sys
+import time
 
 TWOPI = 2 * math.pi
 
@@ -108,6 +109,13 @@ def main():
     parser.add_argument("--level", type=float, default=0.5,
                         help="output level (0..1)")
 
+    parser.add_argument(
+        "--time",
+        type=float,
+        default=0,
+        help="run time in seconds (0 = infinite)"
+    )
+
     args = parser.parse_args()
     audio = pyaudio.PyAudio()
 
@@ -158,10 +166,14 @@ def main():
     else:
         print(f"Tone: {args.freq} Hz")
 
+    start_time = time.time()
+
     while running:
 
-        block = gen.generate(args.chunk)
+        if args.time > 0 and (time.time() - start_time) >= args.time:
+            break
 
+        block = gen.generate(args.chunk)
         stream.write(block.tobytes())
 
     stream.stop_stream()
