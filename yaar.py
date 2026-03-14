@@ -1,582 +1,993 @@
-#! python
+#! /usr/bin/env python3
 #
 # Yet Another Audio analyzeR
 #
 # Copyright 2024 George Biro
 #
-# This program is free software: you can redistribute it and/or modify it
-# under the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# GPLv3-or-later
 #
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS
-# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-#
-# This program is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-# or FITNESS FOR A PARTICULAR PURPOSE.
-#
-# See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along
-# with this program. If not, see <https://www.gnu.org/licenses/>.
-#
-# For noise measurement:
-#
-# f_in = m / chunk * f_sampling, where m is prime number
-#
-# 373 / 65536 * 192000 = 1092.8Hz
 
+from __future__ import annotations
 
+import ctypes
+from ctypes import c_uint32, c_void_p, byref
 import argparse
-import os.path
-import time
 import math
+import os
 import random
+import sys
+import time
+from dataclasses import dataclass
+from typing import Optional, Tuple
+
 import matplotlib.pyplot as plt
-from matplotlib.ticker import EngFormatter
 import numpy as np
 import pyaudio
-# import sounddevice as sd
-
-# display the list of sound device
-def list_sound_devices(audio):
-    host = 0
-    info = audio.get_host_api_info_by_index(host)
-    numdevices = info.get('deviceCount')
-    for i in range(0, numdevices):
-        if (audio.get_device_info_by_host_api_device_index(host, i).get('maxInputChannels')) > 0:
-            print("Input Device id ", i, " - ", audio.get_device_info_by_host_api_device_index(host, i).get('name'))
-
-def riaaDb(x):
-    t1=75e-6
-    t2=318e-6
-    t3=3180e-6
-    w=x*3.14159265359*2
-    return 10.*math.log10(1 + 1 / ((w*t2)**2)) - 10.*math.log10(1 + 1 / ((w*t1)**2)) - 10.*math.log10(1 + (w*t3)**2)
-
-# Compute relative dB value
-def dbRel(k):
-    if (k <= 0):
-        return float('nan')
-
-    return 20.*math.log10(k)
-
-# Compute power dB value
-def dbPow(k):
-    if (k <= 0):
-        return float('nan')
-
-    return 10.*math.log10(k)
-
-def fromDb(d):
-    return 10.**(d / 20.)
-
-# Notch filter mask
-#
-# param wc
-#   FFT signal magnitude
-# param lev
-#   requested minimum level
-# return
-#   An mask array, elements where wc is greater than lev
-def notch(wc, lev):
-    rv = np.zeros(len(wc))
-    rv[wc > lev] = 1
-    return rv
-
-# Determine carrier and harminics
-def carrier(w, num, fm, lev):
-    cinx = np.argmax(w)
-    if cinx < 1:
-        j = 1
-        k = 1
-    else:
-        j = cinx
-        k = num
-
-    mfundamental = notch(w, w[cinx] * lev)
-    mfundamental[w > (w[cinx]  * lev)] = 1
-
-    mharmonics = np.zeros(len(w))
-    (mharmonics[cinx::j])[:k] = 1
-    mharmonics[cinx] = 0
-    mharmonics = mharmonics * fm
-    return cinx, mfundamental, mharmonics
-
-def hlist(w, f, inx, num):
-    return (w[inx::inx])[:num], (f[inx::inx])[:num]
-
-def calcFFreq(w, fl, lev):
-    w0 = notch(w, lev) * w
-    return np.sum(w0 * fl) / np.sum(w0)
-
-def wclean(ts, win, cfreq, flev):
-    mclean = np.sin(2 * np.pi * cfreq * ts) * win
-    wcc = np.fft.rfft(mclean)
-    wc = cuni(np.abs(wcc) / len(wcc))
-    wc[wc < flev] = 0
-    return wc
-
-def rms(meas):
-    return (np.sum(np.square(meas)) / len(meas))**0.5
+from matplotlib.ticker import EngFormatter
 
 
-#def thd_iec(wmagnitude, mharminics):
-#
-#    vall = np.sum(np.square(wmagnitude))
-#    vharmonics = np.sum(np.square(wmagnitude * mharmonics))
-#    if (vall < 1e-100):
-#        return float('nan'), float('nan')
-#
-#    k = (vharmonics / vall)**0.5
-#    return dbRel(k), (100.*k)
+EPS = 1e-20
 
-def thd_ieee(wm, mh, cinx):
-    vfundamental = wm[cinx]
-    vharmonics = np.sum(np.square(wm * mh))
-    if (vfundamental < 1e-100):
-        return float('nan'), float('nan')
-
-    k = (vharmonics**.5) / vfundamental
-    return dbRel(k), (100.*k)
-
-# same a sinad
-def thdn(wm, mfd, mfl, fm):
-
-    vfundamental = np.sum(np.square(wm * mfd))
-    mnoise = fm - mfl
-    vnoise = np.sum(np.square(wm * mnoise))
-
-    if (vfundamental < 1e-100):
-        return float('nan'), float('nan')
-
-    k = (vnoise / vfundamental)**.5
-    return dbRel(k), (100.*k)
-
-def snr(wm, mfd, mflt, fm, mh):
-
-    vsignal = np.sum(np.square(wm * mfd))
-    mnoise = fm - mflt - mh
-    vnoise = np.sum(np.square(wm * mnoise))
-    if (vnoise < 1e-100):
-        return float('nan')
-
-    k = (vsignal / vnoise)**.5
-    return dbRel(k)
-
-def enob(sinad):
-    return ((sinad - 1.76) / 6.02)
-
-def ifind(arr, val):
-    darr = np.absolute(arr - abs(val))
-    return darr.argmin()
-
-def checkImd(iifreq):
-    return ((iifreq[0] != iifreq[1]) and (iifreq[0] != 0) and (iifreq[1] != 0))
-
-def cuni(w):
-    wmax = np.max(w)
-    if (wmax > 1e-6):
-        wuni = w / wmax
-    else:
-        wuni = w
-
-    return wuni
-
-def clog(wuni2):
-    wuni = wuni2
-    wuni[wuni < 1e-10] = 1e-10
-    return 20*np.log10(wuni)
-
-def simSig(sFreq, sNoise, w):
-    r = np.sin(2 * np.pi * sFreq * ts + random.random() * np.pi)
-    if (sNoise > 1e-6):
-        r = r + np.random.normal(0, sNoise, len(r))
-
-    return r * w
-
-def isPrime(n):
-    if (n % 2) == 0 and n > 2:
-        return False
-    return all((n % i) for i in range(3, int(math.sqrt(n)) + 1, 2))
-
-def primeList(fl, m):
-    rv = np.zeros(len(fl))
-    j = 0
-    for i in range(3, len(fl)):
-        if m[i] > .5 and isPrime(i):
-            rv[j] = fl[i]
-            j = j + 1
-
-    return np.resize(rv, j)
-
-def bestFreq(plist, freq):
-    j01 = np.argmin(np.abs(plist - freq * .1))
-    j05 = np.argmin(np.abs(plist - freq * .5))
-    j = np.argmin(np.abs(plist - freq))
-    j2 = np.argmin(np.abs(plist - freq * 2.))
-    j10 = np.argmin(np.abs(plist - freq * 10.))
-    a = [ j01, j05, j, j2, j10 ]
-    for i in range(len(a)):
-        if a[i] < 0:
-            a[i] = 0
-        elif a[i] >= len(plist):
-            a[i] = len(plist) - 1
-
-    return np.take(plist, a)
-
-#    x = mfund
-#    if cinx > 0:
-#        x[cinx - 1] = 1
-#
-#    cinxr = cinx + 1
-#    if cinxr < len(w):
-#        x[cinxr] = 1
-#
-#    y = w * x
-#    return np.sum(fl * y) / np.sum(y)
-
-def argAdc(args):
-    if (args.adcres == 16):
-        iform = pyaudio.paInt16 # 16-bit resolution
-        dtype = np.int16
-        adcRes = 2**15
-    elif (args.adcres == 24):
-        iform = pyaudio.paInt32 # 32-bit resolution
-        dtype = np.int32
-        adcRes = 2**24
-    elif (args.adcres == 32):
-        iform = pyaudio.paInt32 # 32-bit resolution
-        dtype = np.int32
-        adcRes = 2**31
-    else:
-        print("Invalid ADC resolution!")
-        quit()
-    return iform, dtype, adcRes
-
-def argFFTsize(x):
-    return 2**math.floor(math.log2(x) + .5)
-
-def argsMono(x):
-    if x:
-        print("MONO mode!")
-        return 1
-    return 2
-
-def argNoise(x):
-    if (x < 0):
-        return 0
-
-    return 10**(x / -20)
 
 class CustomHelpFormatter(argparse.HelpFormatter):
     def _get_help_string(self, action):
-        help = action.help
+        help_text = action.help
         if action.default is not argparse.SUPPRESS:
-            help += f' (default: {action.default})'
-        return help
+            help_text += f" (default: {action.default})"
+        return help_text
 
-# Begin of the program
-parser = argparse.ArgumentParser(
-                    prog='Yet Another Audio Analyzer',
-                    usage='%(prog)s [options]',
-                    formatter_class=CustomHelpFormatter)
 
-parser.add_argument("--list", action='store_true')
-parser.add_argument("--freq", type=int, default=192000, help="Sample rate")
-parser.add_argument("--dev", type=int, default=4, help="Id of sound device")
-parser.add_argument("--chsel", type=int, default=1, help="Selected channel")
-parser.add_argument("--chnum", type=int, default=2, help="Number of channels")
-parser.add_argument("--chunk", type=int, default=32768, help="FFT size")
-parser.add_argument("--skip", type=int, default="1024", help="Skip samples")
-parser.add_argument("--adcrng", type=float, default=100, help="ADC voltage range")
-parser.add_argument("--adcres", type=int, default=32, help="ADC resolution")
-parser.add_argument("--vrange", type=float, default=40, help="Display voltage range in V")
-parser.add_argument("--frange", type=float, default="70000", help="displayed frequency range in Hz")
-parser.add_argument("--trange", type=float, default="100", help="displayed time range in ms")
-parser.add_argument("--wrange", type=float, default="-150", help="FFT range in dB")
-parser.add_argument("--rload", type=float, default=8, help="Load resistor in Ohm")
-parser.add_argument("--thd", type=int, default=7, help="Number of harmonics for THD calculation")
-parser.add_argument("--duration", type=int, default=240, help="time to exit in s")
-parser.add_argument("--plot", type=str, default="", help="plot to file")
-parser.add_argument("--csv", type=str, default="", help="print to csv")
-parser.add_argument("--window", type=str, default="hanning", help="filtering window")
-parser.add_argument("--avg", action='store_true', help="Enable avg calculation")
-parser.add_argument("--simfreq", type=float, default=0, help="Do sumilation with an exact frequency in Hz")
-parser.add_argument("--simnoise", type=float, default=-1, help="Do simulation with exact noise (in dB) amplitude")
-parser.add_argument("--flttsh", type=float, default=120, help="Notch filter level in dB to skip around the fundamental signal")
-parser.add_argument("--fndtsh", type=float, default=3, help="Filter level to determine the fundamental voltage in dB")
-parser.add_argument("--frqtsh", type=float, default=40, help="Filter level to determine the fundamental frequency in dB")
-parser.add_argument("--cftsh", type=float, default=.25, help="Center frequency treshold in Hz")
-args = parser.parse_args()
+@dataclass
+class AudioConfig:
+    sample_rate: int
+    chunk: int
+    skip: int
+    device_index: int
+    channel_select: int
+    channel_count: int
+    adc_range: float
+    adc_resolution: int
+    load_ohm: float
+    duration_s: int
+    window_name: str
+    avg_enabled: bool
+    sim_freq: float
+    sim_freq2: float
+    sim_noise: float
+    thd_harmonics: int
+    flt_threshold: float
+    fnd_threshold: float
+    frq_threshold: float
+    center_freq_threshold: float
+    two_tone_rel_db: float
+    peak_min_separation_hz: float
 
-doAvg = args.avg
-Rload = args.rload
-Vrange = [ -args.vrange, args.vrange ]
-Frange = [ 10 , args.frange ]
-Wrange = [ args.wrange, 0 ]
-adcRng = args.adcrng    # voltage range of ADC
-thdNum = args.thd       # number of harmonics to be checked
-skip = args.skip
-simFreq = args.simfreq
-simNoise = argNoise(args.simnoise)
-fltTsh = fromDb(-args.flttsh)
-fndTsh = fromDb(-args.fndtsh)
-frqTsh = fromDb(-args.frqtsh)
-cfTsh = args.cftsh
+@dataclass
+class AdcFormat:
+    pa_format: int
+    dtype: np.dtype
+    scale: float
 
-iform, dtype, adcRes = argAdc(args)
 
-chSel = args.chsel
-chNum = args.chnum
-chunk = argFFTsize(args.chunk)      # FFT window size
-sRate = args.freq  # sampling rate
-duration = args.duration
-dev_index = args.dev    # device index found (see printout)
+def list_sound_devices(audio: pyaudio.PyAudio) -> None:
+    host = 0
+    info = audio.get_host_api_info_by_index(host)
+    num_devices = info.get("deviceCount", 0)
+    for i in range(num_devices):
+        dev = audio.get_device_info_by_host_api_device_index(host, i)
+        if dev.get("maxInputChannels", 0) > 0:
+            print(f"Input Device id {i} - {dev.get('name')}")
 
-audio = pyaudio.PyAudio()
-if args.list:
-    list_sound_devices(audio)
-    quit()
 
-# create pyaudio stream
-stream = None
-if (dev_index >= 0) and (simFreq < .01):
+def riaa_db(freq_hz: float) -> float:
+    t1 = 75e-6
+    t2 = 318e-6
+    t3 = 3180e-6
+    w = 2.0 * math.pi * freq_hz
+    return (
+        10.0 * math.log10(1.0 + 1.0 / ((w * t2) ** 2))
+        - 10.0 * math.log10(1.0 + 1.0 / ((w * t1) ** 2))
+        - 10.0 * math.log10(1.0 + (w * t3) ** 2)
+    )
+
+
+def db_rel(k: float) -> float:
+    return float("nan") if k <= 0 else 20.0 * math.log10(k)
+
+
+def db_pow(k: float) -> float:
+    return float("nan") if k <= 0 else 10.0 * math.log10(k)
+
+
+def from_db(db: float) -> float:
+    return 10.0 ** (db / 20.0)
+
+
+def notch(values: np.ndarray, level: float) -> np.ndarray:
+    mask = np.zeros_like(values, dtype=float)
+    mask[values > level] = 1.0
+    return mask
+
+
+def carrier(
+    spectrum: np.ndarray, num_harmonics: int, freq_mask: np.ndarray, level: float
+) -> Tuple[int, np.ndarray, np.ndarray]:
+    carrier_idx = int(np.argmax(spectrum))
+
+    if carrier_idx < 1:
+        step = 1
+        harmonic_count = 1
+    else:
+        step = carrier_idx
+        harmonic_count = num_harmonics
+
+    fundamental_mask = notch(spectrum, spectrum[carrier_idx] * level)
+
+    harmonics_mask = np.zeros_like(spectrum, dtype=float)
+    harmonics_mask[carrier_idx::step][:harmonic_count] = 1.0
+    harmonics_mask[carrier_idx] = 0.0
+    harmonics_mask *= freq_mask
+
+    return carrier_idx, fundamental_mask, harmonics_mask
+
+def build_peak_mask(freqs: np.ndarray, center_freq: float, half_width_hz: float) -> np.ndarray:
+    mask = np.zeros(len(freqs), dtype=float)
+    if center_freq <= 0:
+        return mask
+    lo = center_freq - half_width_hz
+    hi = center_freq + half_width_hz
+    mask[(freqs >= lo) & (freqs <= hi)] = 1.0
+    return mask
+
+
+def peak_band_from_synth(
+    ts: np.ndarray,
+    window: np.ndarray,
+    freqs: np.ndarray,
+    center_freq: float,
+    floor_level: float,
+) -> np.ndarray:
+    wc = wclean(ts, window, center_freq, floor_level)
+    return notch(wc, 1e-20)
+
+
+def find_top_two_peaks(
+    wm: np.ndarray,
+    freqs: np.ndarray,
+    fmask: np.ndarray,
+    min_rel_level: float,
+    min_sep_hz: float,
+) -> list[int]:
+    """
+    Find up to two significant local maxima inside fmask.
+    min_rel_level: linear amplitude ratio versus strongest peak
+    min_sep_hz: required spacing between peaks
+    """
+    valid = np.where(fmask > 0.5)[0]
+    if len(valid) < 3:
+        return []
+
+    candidates = []
+    for i in valid[1:-1]:
+        if wm[i] > wm[i - 1] and wm[i] >= wm[i + 1]:
+            candidates.append(i)
+
+    if not candidates:
+        return []
+
+    candidates.sort(key=lambda i: wm[i], reverse=True)
+    strongest = wm[candidates[0]]
+    if strongest <= EPS:
+        return []
+
+    selected = [candidates[0]]
+    for idx in candidates[1:]:
+        if wm[idx] < strongest * min_rel_level:
+            continue
+        if all(
+            abs(freqs[idx] - freqs[s]) >= min_sep_hz and
+            abs(freqs[idx] / freqs[s] - round(freqs[idx] / freqs[s])) > 0.05
+            for s in selected
+        ):
+            selected.append(idx)
+            if len(selected) == 2:
+                break
+
+    return sorted(selected, key=lambda i: freqs[i])
+
+
+def calc_peak_freq(
+    wm: np.ndarray,
+    freqs: np.ndarray,
+    center_idx: int,
+    rel_level: float,
+) -> float:
+    """
+    Refine a single-peak frequency from bins around the detected maximum.
+    """
+    peak = wm[center_idx]
+    if peak <= EPS:
+        return freqs[center_idx]
+
+    local = np.zeros(len(wm), dtype=float)
+    lo = max(0, center_idx - 2)
+    hi = min(len(wm), center_idx + 3)
+    local[lo:hi] = wm[lo:hi]
+    local[local < peak * rel_level] = 0.0
+    denom = np.sum(local)
+    if denom <= EPS:
+        return freqs[center_idx]
+    return float(np.sum(local * freqs) / denom)
+
+
+def imd_total(
+    wm: np.ndarray,
+    mfund1: np.ndarray,
+    mfund2: np.ndarray,
+    fmask: np.ndarray,
+) -> tuple[float, float]:
+    """
+    General-purpose IMD metric:
+    unwanted energy divided by wanted energy, where wanted energy
+    is the sum of the two fundamentals.
+    """
+    msig = np.clip(mfund1 + mfund2, 0.0, 1.0)
+    mnoise = np.clip(fmask - msig, 0.0, 1.0)
+
+    vsig = np.sum(np.square(wm * msig))
+    vdist = np.sum(np.square(wm * mnoise))
+
+    if vsig < 1e-100:
+        return float("nan"), float("nan")
+
+    k = math.sqrt(vdist / vsig)
+    return db_rel(k), 100.0 * k
+
+
+def imd_ccif_difference(
+    wm: np.ndarray,
+    freqs: np.ndarray,
+    f1: float,
+    f2: float,
+    half_width_hz: float,
+) -> tuple[float, float, float]:
+    """
+    For CCIF-like two-tone tests, report the difference product |f2-f1|.
+    Returns: product frequency, level relative to RMS of the two tones, percent
+    """
+    fd = abs(f2 - f1)
+    if fd <= 0:
+        return float("nan"), float("nan"), float("nan")
+
+    diff_mask = build_peak_mask(freqs, fd, half_width_hz)
+    vdiff = np.sum(np.square(wm * diff_mask))
+
+    m1 = build_peak_mask(freqs, f1, half_width_hz)
+    m2 = build_peak_mask(freqs, f2, half_width_hz)
+    vref = np.sum(np.square(wm * (m1 + m2)))
+
+    if vref < 1e-100:
+        return fd, float("nan"), float("nan")
+
+    k = math.sqrt(vdiff / vref)
+    return fd, db_rel(k), 100.0 * k
+
+def calc_f_freq(spectrum: np.ndarray, freqs: np.ndarray, level: float) -> float:
+    weighted = notch(spectrum, level) * spectrum
+    denom = np.sum(weighted)
+    if denom <= EPS:
+        return 0.0
+    return float(np.sum(weighted * freqs) / denom)
+
+
+def normalize_unit(values: np.ndarray) -> np.ndarray:
+    vmax = np.max(values)
+    if vmax > 1e-6:
+        return values / vmax
+    return values.copy()
+
+
+def clean_log(values: np.ndarray, floor: float = 1e-10) -> np.ndarray:
+    clipped = np.maximum(values, floor)
+    return 20.0 * np.log10(clipped)
+
+
+def wclean(ts: np.ndarray, window: np.ndarray, center_freq: float, floor_level: float) -> np.ndarray:
+    clean = np.sin(2.0 * np.pi * center_freq * ts) * window
+    spectrum = np.fft.rfft(clean)
+    mag = normalize_unit(np.abs(spectrum) / len(spectrum))
+    mag[mag < floor_level] = 0.0
+    return mag
+
+
+def rms(values: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(np.square(values))))
+
+
+def thd_ieee(wm: np.ndarray, mh: np.ndarray, carrier_idx: int) -> Tuple[float, float]:
+    vfund = wm[carrier_idx]
+    vharm = np.sum(np.square(wm * mh))
+    if vfund < 1e-100:
+        return float("nan"), float("nan")
+    k = math.sqrt(vharm) / vfund
+    return db_rel(k), 100.0 * k
+
+
+def thdn(wm: np.ndarray, mfund: np.ndarray, mfilter: np.ndarray, fmask: np.ndarray) -> Tuple[float, float]:
+    vfund = np.sum(np.square(wm * mfund))
+    noise_mask = fmask - mfilter
+    vnoise = np.sum(np.square(wm * noise_mask))
+    if vfund < 1e-100:
+        return float("nan"), float("nan")
+    k = math.sqrt(vnoise / vfund)
+    return db_rel(k), 100.0 * k
+
+
+def snr(wm: np.ndarray, mfund: np.ndarray, mfilter: np.ndarray, fmask: np.ndarray, mh: np.ndarray) -> float:
+    vsignal = np.sum(np.square(wm * mfund))
+    noise_mask = fmask - mfilter - mh
+    vnoise = np.sum(np.square(wm * noise_mask))
+    if vnoise < 1e-100:
+        return float("nan")
+    k = math.sqrt(vsignal / vnoise)
+    return db_rel(k)
+
+
+def enob(sinad_db: float) -> float:
+    return (sinad_db - 1.76) / 6.02
+
+
+def nearest_index(arr: np.ndarray, value: float) -> int:
+    return int(np.argmin(np.abs(arr - abs(value))))
+
+
+def is_prime(n: int) -> bool:
+    if n < 2:
+        return False
+    if n == 2:
+        return True
+    if (n % 2) == 0:
+        return False
+    return all(n % i for i in range(3, int(math.sqrt(n)) + 1, 2))
+
+
+def prime_freq_list(freqs: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    out = []
+    for i in range(3, len(freqs)):
+        if mask[i] > 0.5 and is_prime(i):
+            out.append(freqs[i])
+    return np.array(out, dtype=float)
+
+def best_freq(prime_list: np.ndarray) -> np.ndarray:
+    if len(prime_list) == 0:
+        return np.array([], dtype=float)
+
+    targets = [60.0, 1000.0, 7000.0, 10000.0, 19000.0, 20000.0]
+    indices = [int(np.argmin(np.abs(prime_list - t))) for t in targets]
+    return prime_list[np.clip(indices, 0, len(prime_list) - 1)]
+
+def get_adc_format(bits: int) -> AdcFormat:
+    if bits == 16:
+        return AdcFormat(pyaudio.paInt16, np.int16, 2**15)
+    if bits == 24:
+        # Stored in 32-bit container for PyAudio compatibility.
+        return AdcFormat(pyaudio.paInt32, np.int32, 2**24)
+    if bits == 32:
+        return AdcFormat(pyaudio.paInt32, np.int32, 2**31)
+    raise ValueError("Invalid ADC resolution. Use 16, 24, or 32.")
+
+
+def nearest_fft_size(x: int) -> int:
+    if x < 2:
+        raise ValueError("FFT size must be >= 2")
+    return 2 ** math.floor(math.log2(x) + 0.5)
+
+
+def noise_from_db(x: float) -> float:
+    if x < 0:
+        return 0.0
+    return 10 ** (-x / 20.0)
+
+
+def get_window(name: str, chunk: int) -> np.ndarray:
+    key = name.strip().lower()
+    if key == "bartlett":
+        return np.bartlett(chunk)
+    if key == "blackman":
+        return np.blackman(chunk)
+    if key == "hamming":
+        return np.hamming(chunk)
+    if key in {"hanning", "hann"}:
+        return np.hanning(chunk)
+    if key in {"rect", "rectangular", "none"}:
+        return np.ones(chunk)
+    raise ValueError(f"Unsupported window: {name}")
+
+
+def simulate_signal(
+    freq_hz: float,
+    noise_amp: float,
+    ts: np.ndarray,
+    window: np.ndarray,
+    freq2_hz: float = 0.0,
+    amp2: float = 1.0,
+) -> np.ndarray:
+    signal = np.sin(2.0 * np.pi * freq_hz * ts + random.random() * np.pi)
+    if freq2_hz > 0.0:
+        signal += amp2 * np.sin(2.0 * np.pi * freq2_hz * ts + random.random() * np.pi)
+    if noise_amp > 1e-6:
+        signal += np.random.normal(0.0, noise_amp, len(signal))
+    return signal * window
+
+
+def open_stream(audio: pyaudio.PyAudio, cfg: AudioConfig, adc: AdcFormat) -> Optional[pyaudio.Stream]:
+    if cfg.device_index < 0 or cfg.sim_freq >= 0.01:
+        return None
+
+    device_info = audio.get_device_info_by_index(cfg.device_index)
+    max_channels = int(device_info.get("maxInputChannels", 0))
+    if max_channels < 1:
+        raise RuntimeError(f"Device '{device_info.get('name')}' has no input channels.")
+
+    if cfg.channel_count > max_channels:
+        print(
+            f"Warning: Device '{device_info.get('name')}' supports only "
+            f"{max_channels} input channel(s). Adjusting from {cfg.channel_count}."
+        )
+        cfg.channel_count = max_channels
+
+    if cfg.channel_select < 0 or cfg.channel_select >= cfg.channel_count:
+        raise ValueError(
+            f"--chsel must be between 0 and {cfg.channel_count - 1} for --chnum {cfg.channel_count}"
+        )
+
+    return audio.open(
+        format=adc.pa_format,
+        rate=cfg.sample_rate,
+        channels=cfg.channel_count,
+        input=True,
+        input_device_index=cfg.device_index,
+        frames_per_buffer=cfg.chunk + cfg.skip,
+        start=True,
+    )
+
+
+def read_measurement(stream: pyaudio.Stream, cfg: AudioConfig, adc: AdcFormat, window: np.ndarray) -> np.ndarray:
+    data = stream.read(cfg.chunk + cfg.skip, exception_on_overflow=False)
+    meas_full = np.frombuffer(data, dtype=adc.dtype)
+
+    meas_full = meas_full[cfg.skip * cfg.channel_count :]
+    meas_raw = meas_full[cfg.channel_select :: cfg.channel_count]
+    return meas_raw[: cfg.chunk] * window * (cfg.adc_range / adc.scale)
+
+
+def disable_voice_processing(device_index: int):
+    """
+    Disable CoreAudio voice processing (AGC, echo cancel, HPF)
+    for the selected input device.
+    """
+
     try:
-        device_info = audio.get_device_info_by_index(dev_index)
-        max_channels = device_info.get('maxInputChannels')
+        coreaudio = ctypes.cdll.LoadLibrary(
+            "/System/Library/Frameworks/CoreAudio.framework/CoreAudio"
+        )
+
+        UInt32 = ctypes.c_uint32
+
+        class AudioObjectPropertyAddress(ctypes.Structure):
+            _fields_ = [
+                ("mSelector", UInt32),
+                ("mScope", UInt32),
+                ("mElement", UInt32),
+            ]
+
+        # CoreAudio constants
+        kAudioDevicePropertyVoiceProcessingEnable = 1987078511
+        kAudioObjectPropertyScopeInput = 1768845428
+        kAudioObjectPropertyElementMaster = 0
+
+        addr = AudioObjectPropertyAddress(
+            kAudioDevicePropertyVoiceProcessingEnable,
+            kAudioObjectPropertyScopeInput,
+            kAudioObjectPropertyElementMaster,
+        )
+
+        value = UInt32(0)
+        size = UInt32(ctypes.sizeof(value))
+
+        device_id = UInt32(device_index)
+
+        coreaudio.AudioObjectSetPropertyData(
+            device_id,
+            ctypes.byref(addr),
+            0,
+            None,
+            size,
+            ctypes.byref(value),
+        )
+
+        print(f"Voice processing disabled for device {device_index}")
+
+    except Exception as e:
+        print("Voice processing disable failed:", e)
+
+def enable_pro_audio_mode(device_id: int):
+    """
+    Enable CoreAudio pro-audio behavior:
+    - hog mode (exclusive access)
+    - minimal safety offset
+    - disables most system DSP
+    """
+
+    try:
+        coreaudio = ctypes.cdll.LoadLibrary(
+            "/System/Library/Frameworks/CoreAudio.framework/CoreAudio"
+        )
+
+        UInt32 = ctypes.c_uint32
+        pid = UInt32(os.getpid())
+
+        class AudioObjectPropertyAddress(ctypes.Structure):
+            _fields_ = [
+                ("mSelector", UInt32),
+                ("mScope", UInt32),
+                ("mElement", UInt32),
+            ]
+
+        # constants
+        kAudioDevicePropertyHogMode = 1752132965
+        kAudioObjectPropertyScopeGlobal = 1735159650
+        kAudioObjectPropertyElementMaster = 0
+
+        addr = AudioObjectPropertyAddress(
+            kAudioDevicePropertyHogMode,
+            kAudioObjectPropertyScopeGlobal,
+            kAudioObjectPropertyElementMaster,
+        )
+
+        size = UInt32(ctypes.sizeof(pid))
+
+        coreaudio.AudioObjectSetPropertyData(
+            UInt32(device_id),
+            ctypes.byref(addr),
+            0,
+            None,
+            size,
+            ctypes.byref(pid),
+        )
+
+        print(f"Pro Audio (hog) mode enabled for device {device_id}")
+
+    except Exception as e:
+        print("Could not enable Pro Audio mode:", e)
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="Yet Another Audio Analyzer",
+        usage="%(prog)s [options]",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    parser.add_argument("--list", action="store_true")
+    parser.add_argument("--freq", type=int, default=192000, help="Sample rate")
+    parser.add_argument("--dev", type=int, default=4, help="ID of sound device")
+    parser.add_argument("--chsel", type=int, default=0, help="Selected channel (0-based)")
+    parser.add_argument("--chnum", type=int, default=2, help="Number of channels")
+    parser.add_argument("--chunk", type=int, default=32768, help="FFT size")
+    parser.add_argument("--skip", type=int, default=1024, help="Samples to skip")
+    parser.add_argument("--adcrng", type=float, default=100.0, help="ADC voltage range")
+    parser.add_argument("--adcres", type=int, default=32, help="ADC resolution")
+    parser.add_argument("--vrange", type=float, default=40.0, help="Display voltage range in V")
+    parser.add_argument("--frange", type=float, default=70000.0, help="Displayed frequency range in Hz")
+    parser.add_argument("--trange", type=float, default=100.0, help="Displayed time range in ms")
+    parser.add_argument("--wrange", type=float, default=-150.0, help="FFT range lower bound in dB")
+    parser.add_argument("--rload", type=float, default=8.0, help="Load resistor in ohm")
+    parser.add_argument("--thd", type=int, default=7, help="Number of harmonics for THD")
+    parser.add_argument("--duration", type=int, default=240, help="Time to exit in seconds")
+    parser.add_argument("--plot", type=str, default="", help="Write plot to file")
+    parser.add_argument("--csv", type=str, default="", help="Append metrics to CSV")
+    parser.add_argument("--window", type=str, default="hanning", help="Window function")
+    parser.add_argument("--avg", action="store_true", help="Enable averaging")
+    parser.add_argument("--simfreq", type=float, default=0.0, help="Simulate exact frequency in Hz")
+    parser.add_argument("--simnoise", type=float, default=-1.0, help="Simulate noise amplitude in dB")
+    parser.add_argument("--flttsh", type=float, default=120.0, help="Notch filter level in dB")
+    parser.add_argument("--fndtsh", type=float, default=3.0, help="Fundamental voltage threshold in dB")
+    parser.add_argument("--frqtsh", type=float, default=40.0, help="Fundamental frequency threshold in dB")
+    parser.add_argument("--cftsh", type=float, default=0.25, help="Center frequency threshold in Hz")
+    parser.add_argument(
+        "--twotone-rel-db",
+        type=float,
+        default=16.0,
+        help="Second tone must be within this many dB of the main tone to enter IMD mode",
+    )
+    parser.add_argument(
+        "--peak-sep-hz",
+        type=float,
+        default=20.0,
+        help="Minimum separation between two fundamentals in Hz for IMD detection",
+    )
+    parser.add_argument("--simfreq2", type=float, default=0.0,
+                    help="Second simulated tone frequency")
+
+    return parser
+
+
+def init_csv(path: str) -> None:
+    if path and not os.path.isfile(path):
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(
+                "Mode,F1,F2,THD_dB,THD_pct,IMD_dB,IMD_pct,CCIF_diff_Hz,CCIF_diff_dB,CCIF_diff_pct,"
+                "THDN_dB,THDN_pct,SNR_dB,ENOB,Vrms,Prms\n"
+            )
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+
+    chunk = nearest_fft_size(args.chunk)
+    adc = get_adc_format(args.adcres)
+
+    cfg = AudioConfig(
+        sample_rate=args.freq,
+        chunk=chunk,
+        skip=args.skip,
+        device_index=args.dev,
+        channel_select=args.chsel,
+        channel_count=args.chnum,
+        adc_range=args.adcrng,
+        adc_resolution=args.adcres,
+        load_ohm=args.rload,
+        duration_s=args.duration,
+        window_name=args.window,
+        avg_enabled=args.avg,
+        sim_freq=args.simfreq,
+        sim_freq2=args.simfreq2,
+        sim_noise=noise_from_db(args.simnoise),
+        thd_harmonics=args.thd,
+        flt_threshold=from_db(-args.flttsh),
+        fnd_threshold=from_db(-args.fndtsh),
+        frq_threshold=from_db(-args.frqtsh),
+        center_freq_threshold=args.cftsh,
+        two_tone_rel_db=args.twotone_rel_db,
+        peak_min_separation_hz=args.peak_sep_hz,
+    )
+
+    voltage_range = [-args.vrange, args.vrange]
+    freq_range = [10.0, args.frange]
+    db_range = [args.wrange, 0.0]
+
+    audio = pyaudio.PyAudio()
+    enable_pro_audio_mode(cfg.device_index)
+    disable_voice_processing(cfg.device_index)
+    stream = open_stream(audio, cfg, adc)
+    
+    try:
+        if args.list:
+            list_sound_devices(audio)
+            return 0
+
+        window = get_window(cfg.window_name, cfg.chunk)
+        init_csv(args.csv)
+
+        pic_base, pic_ext = os.path.splitext(args.plot) if args.plot else ("", "")
+
+        fig, (skip0, ax_time, skip1, ax_freq, skip2) = plt.subplots(
+            5, 1, figsize=(16, 9), gridspec_kw={"height_ratios": [0.1, 2, 0.01, 6, 0.5]}
+        )
+
+        closed = {"value": False}
+
+        def on_close(_event):
+            closed["value"] = True
+
+        fig.canvas.mpl_connect("close_event", on_close)
+        fig.suptitle("Yet Another Audio analyzeR")
+        fig.tight_layout()
+        fig.subplots_adjust(left=0.06, hspace=None)
+        skip0.axis("off")
+        skip1.axis("off")
+        skip2.axis("off")
+
+        formatter_s = EngFormatter(unit="s")
+        formatter_v = EngFormatter(unit="V")
+        formatter_hz = EngFormatter(unit="Hz")
+        formatter_db = EngFormatter(unit="dB")
+
+        freqs = np.abs(np.fft.rfftfreq(cfg.chunk) * cfg.sample_rate)
+        fmask = np.zeros(len(freqs), dtype=float)
+        i_lo = nearest_index(freqs, freq_range[0])
+        i_hi = nearest_index(freqs, freq_range[1])
+        fmask[i_lo:i_hi] = 1.0
+        prime_freqs = prime_freq_list(freqs, fmask)
+
+        tmax = cfg.chunk / cfg.sample_rate
+        time_range = [
+            max((tmax - args.trange * 1e-3) * 0.5, 0.0),
+            min((tmax + args.trange * 1e-3) * 0.5, tmax),
+        ]
+        ts = np.linspace(0.0, tmax, cfg.chunk, endpoint=False)
+
+        riaa_1000 = riaa_db(1000.0)
+
+        wmagsum = np.zeros(len(freqs), dtype=float)
+        wmagdiv = 0
+        prev_carrier_idx = -1
+        stable_count = 0
+        write_after = 10 if cfg.avg_enabled else 3
+
+        stream = open_stream(audio, cfg, adc)
         
-        if chNum > max_channels:
-            print(f"Warning: Device '{device_info.get('name')}' only supports {max_channels} input channel(s).")
-            print(f"         You requested {chNum}. Adjusting to {max_channels} channel(s).")
-            chNum = int(max_channels) # Make sure it's an integer
+        t_start = time.time()
+        while (time.time() - t_start < cfg.duration_s) and not closed["value"]:
+            if stream is None:
+                meas = simulate_signal(cfg.sim_freq, cfg.sim_noise, ts, window, cfg.sim_freq2)
+            else:
+                meas = read_measurement(stream, cfg, adc, window)
 
-        stream = audio.open(format = iform,rate = sRate,channels = chNum, input_device_index = dev_index,input = True, frames_per_buffer=chunk+skip)
+            if len(meas) < 16:
+                raise RuntimeError("Measurement buffer too short.")
 
-    except (ValueError, IOError) as e:
-        print(f"Error opening audio device {dev_index}: {e}")
-        print("Please check your audio devices using the --list flag.")
-        quit()
+            # Time-domain plot
+            ax_time.cla()
+            ax_time.set_title("Time Domain", loc="left")
+            ax_time.set_xlim(time_range)
+            ax_time.set_ylim(voltage_range)
+            ax_time.xaxis.set_major_formatter(formatter_s)
+            ax_time.yaxis.set_major_formatter(formatter_v)
+            ax_time.plot(ts, meas, "r")
+            ax_time.grid()
 
-def on_press(event):
-    print("on press")
-    quit()
+            # FFT
+            spectrum_complex = np.fft.rfft(meas) * fmask
+            mag = normalize_unit(np.abs(spectrum_complex) / len(spectrum_complex))
 
-def on_close(event):
-    print("on close")
-    quit()
+            if len(mag) != len(freqs):
+                raise RuntimeError("Spectrum length mismatch.")
 
-fig, (skip0, ax1, skip1, ax2, skip2) = plt.subplots(5,1,figsize=(16,9), gridspec_kw={'height_ratios': [.1, 2, .01, 6, .5]})
-#fig.canvas.mpl_connect('key_press_event', on_press)
-fig.canvas.mpl_connect('close_event', on_close)
+            peak_indices = find_top_two_peaks(
+                mag,
+                freqs,
+                fmask,
+                min_rel_level = 10 ** (-cfg.two_tone_rel_db / 20),
+                min_sep_hz=cfg.peak_min_separation_hz,
+            )
 
-fig.suptitle('Yet another Audio analyseR')
-fig.tight_layout()
-fig.subplots_adjust(left=.06, bottom=None, right=None, top=None, wspace=None, hspace=None)
-skip0.axis("off")
-skip1.axis("off")
-skip2.axis("off")
+            imd_mode = len(peak_indices) >= 2
 
-flist = abs(np.fft.rfftfreq(chunk) * sRate)
-# Determine Audio Range
-fmask = np.zeros(len(flist))
-ilist = [ ifind(flist, Frange[0]), ifind(flist, Frange[1]) ]
-fmask[ilist[0]:ilist[1]] = 1
-plist = primeList(flist, fmask)
-wmagsum = np.zeros(len(flist))
-wmagdiv = 0
+            carrier_idx = peak_indices[0] if peak_indices else int(np.argmax(mag))
+            carrier_freq = freqs[carrier_idx]
 
-# Determin Time Range
-tmax = chunk / sRate
-Trange = [ max((tmax - args.trange * 1e-3) * .5, 0), min((tmax + args.trange * 1e-3) * .5, tmax) ]
-ts = np.linspace(0, tmax, chunk)
+            if prev_carrier_idx == carrier_idx:
+                stable_count += 1
+            else:
+                stable_count = 0
+            prev_carrier_idx = carrier_idx
 
-if args.window == "bartlet":
-    win = np.bartlet(chunk)
-elif args.window == "blackman":
-    win = np.blackman(chunk)
-elif args.window == "hamming":
-    win = np.hamming(chunk)
-elif args.window == "hanning":
-    win = np.hanning(chunk)
-else:
-    win = np.ones(chunk)
+            wc = np.zeros_like(mag)
+            if not imd_mode:
+                fundamental_mask = notch(mag, mag[carrier_idx] * cfg.fnd_threshold)
+                harmonics_mask = np.zeros_like(mag, dtype=float)
 
-csvfile = args.csv
+                if carrier_idx > 0:
+                    harmonics_mask[carrier_idx::carrier_idx][: cfg.thd_harmonics] = 1.0
+                    harmonics_mask[carrier_idx] = 0.0
+                    harmonics_mask *= fmask
 
-if (csvfile != "") and (not os.path.isfile(csvfile)):
-    with open(csvfile, 'w+') as f:
-        f.write("Carrier,THD DB,THD,THD-N DB,THD-N,SNR,ENOB,Vrms,Prms\n")
-        f.close()
+                fundamental_freq = calc_peak_freq(mag, freqs, carrier_idx, cfg.frq_threshold)
+                chosen_freq = (
+                    carrier_freq
+                    if abs(fundamental_freq - carrier_freq) < cfg.center_freq_threshold
+                    else fundamental_freq
+                )
 
-if args.plot != "":
-    picfile, picfile_ext = os.path.splitext(args.plot)
-else:
-    picfile = ""
-    picfile_ext = ""
+                wc = wclean(ts, window, chosen_freq, cfg.flt_threshold)
+                analysis_filter = notch(wc, 1e-20) * fmask
 
-pCInx = -1
-iCnt = 0
-tsStart = time.time()
+                tone1_freq = chosen_freq
+                tone2_freq = 0.0
+                tone1_mask = fundamental_mask
+                tone2_mask = np.zeros_like(mag, dtype=float)
 
-wrCnt = 10 if doAvg else 3
+            else:
+                idx1, idx2 = peak_indices[:2]
+                tone1_freq = calc_peak_freq(mag, freqs, idx1, cfg.frq_threshold)
+                tone2_freq = calc_peak_freq(mag, freqs, idx2, cfg.frq_threshold)
 
-formatterS = EngFormatter(unit='s')
-formatterV = EngFormatter(unit='V')
-formatterHz = EngFormatter(unit='Hz')
-formatterDb = EngFormatter(unit='dB')
+                tone1_mask = peak_band_from_synth(ts, window, freqs, tone1_freq, cfg.flt_threshold) * fmask
+                tone2_mask = peak_band_from_synth(ts, window, freqs, tone2_freq, cfg.flt_threshold) * fmask
 
-riaa1000 = riaaDb(1000)
+                fundamental_mask = np.clip(tone1_mask + tone2_mask, 0.0, 1.0)
+                harmonics_mask = np.zeros_like(mag, dtype=float)
+                analysis_filter = fundamental_mask
+                fundamental_freq = tone1_freq
+                chosen_freq = tone1_freq
+                wc = tone1_mask + tone2_mask
 
-while (time.time() - tsStart < duration):
+            if cfg.avg_enabled:
+                if stable_count < 3:
+                    wmagsum[:] = 0.0
+                    wmagdiv = 0
+                wmagsum += mag
+                wmagdiv += 1
+                wmagnitude = wmagsum / max(wmagdiv, 1)
+            else:
+                wmagnitude = mag
 
-    # record data chunk
-    if stream is None:
-        meas = simSig(simFreq, simNoise, win)
-    else:
-        stream.start_stream()
-        data = stream.read(chunk + skip, exception_on_overflow=False)
-        stream.stop_stream()
-        measFull = np.frombuffer(data, dtype=dtype)[skip*chNum:]
-        if chNum > 1:
-            measRaw = measFull[chSel::2]
-        else:
-            measRaw = measFull
-        meas = measRaw * win * (adcRng / adcRes)
+            # Time-domain metrics
+            vpp = float(np.max(meas) - np.min(meas))
+            ppeak = float(np.max(np.square(meas)) / cfg.load_ohm)
+            vrms = rms(meas)
+            prms = (vrms ** 2) / cfg.load_ohm
 
-    if len(meas) < 16:
-        print("len(meas) < 16")
-        quit()
+            # Frequency-domain metrics
+            if not imd_mode:
+                thd_db, thd_pct = thd_ieee(wmagnitude, harmonics_mask, carrier_idx)
+                sinad_db, sinad_pct = thdn(wmagnitude, fundamental_mask, analysis_filter, fmask)
+                snr_db = snr(wmagnitude, fundamental_mask, analysis_filter, fmask, harmonics_mask)
+                enob_bits = enob(sinad_db)
 
-    ax1.cla()
-    ax1.set_title('Time Domain', loc='left')
-#    ax1.set_xlabel('Time')
-#    ax1.set_ylabel('Amplitude')
-    ax1.set_xlim(Trange)
-    ax1.xaxis.set_major_formatter(formatterS)
-    ax1.set_ylim(Vrange)
-    ax1.yaxis.set_major_formatter(formatterV)
-    ax1.plot(ts, meas, 'r')
-    ax1.grid()
+                imd_db = float("nan")
+                imd_pct = float("nan")
+                imd_diff_freq = float("nan")
+                imd_diff_db = float("nan")
+                imd_diff_pct = float("nan")
+            else:
+                imd_db, imd_pct = imd_total(wmagnitude, tone1_mask, tone2_mask, fmask)
+                sinad_db, sinad_pct = thdn(wmagnitude, fundamental_mask, analysis_filter, fmask)
+                snr_db = snr(wmagnitude, fundamental_mask, analysis_filter, fmask, np.zeros_like(wmagnitude))
+                enob_bits = enob(sinad_db)
 
-    # compute furie and the related freq values
-    wcomplex = np.fft.rfft(meas) * fmask
-    wmag1 = cuni(np.abs(wcomplex) / len(wcomplex))
-    if (len(wmag1) != len(flist)):
-        print("len(w)%d != len(flist)%d" % (len(wmag1), len(flist)))
-        quit()
+                thd_db = float("nan")
+                thd_pct = float("nan")
 
-    cinx, mfundamental, mharmonics = carrier(wmag1, thdNum, fmask, fndTsh)
-    if (np.sum(mharmonics) >= np.sum(fmask)):
-        quit()
+                bin_width_hz = cfg.sample_rate / cfg.chunk
+                imd_diff_freq, imd_diff_db, imd_diff_pct = imd_ccif_difference(
+                    wmagnitude,
+                    freqs,
+                    tone1_freq,
+                    tone2_freq,
+                    half_width_hz=max(2.0 * bin_width_hz, 2.0),
+                )
 
-    cfreq = flist[cinx]                       # center frequency
-    ffreq = calcFFreq(wmag1, flist, frqTsh)   # fundamental frequency
+            if stable_count == write_after and args.csv:
+                mode_name = "IMD" if imd_mode else "THD"
+                with open(args.csv, "a", encoding="utf-8") as f:
+                    f.write(
+                        f"{mode_name},{tone1_freq},{tone2_freq},{thd_db},{thd_pct},{imd_db},{imd_pct},"
+                        f"{imd_diff_freq},{imd_diff_db},{imd_diff_pct},"
+                        f"{sinad_db},{sinad_pct},{snr_db},{enob_bits},{vrms},{prms}\n"
+                    )
 
-    if (pCInx == cinx):
-        iCnt = iCnt + 1
-    else:
-        iCnt = 0
+            # Frequency-domain plot
+            ax_freq.cla()
+            ax_freq.set_title("Frequency Domain", loc="left")
+            ax_freq.set_xscale("log")
+            ax_freq.set_xlim(freq_range)
+            ax_freq.set_ylim(db_range)
+            ax_freq.xaxis.set_major_formatter(formatter_hz)
+            ax_freq.yaxis.set_major_formatter(formatter_db)
+            ax_freq.plot(freqs[i_lo:i_hi], clean_log(wmagnitude[i_lo:i_hi]), "b-")
+            ax_freq.plot(freqs[i_lo:i_hi], clean_log(wc[i_lo:i_hi]), "g.")
+            ax_freq.grid()
 
-    pCInx = cinx
-    wcFreq = cfreq if (abs(ffreq - cfreq) < cfTsh) else ffreq
-    wc = wclean(ts, win, wcFreq, fltTsh)
-    mfilter = notch(wc, 1e-20) * fmask
+            if not imd_mode and carrier_idx > 0:
+                for i in range(1, 1 + cfg.thd_harmonics):
+                    idx = carrier_idx * i
+                    if idx < len(wmagnitude):
+                        y = wmagnitude[idx]
+                        if y > 1e-10:
+                            y_db = 20.0 * math.log10(y)
+                            if y_db > db_range[0]:
+                                ax_freq.text(
+                                    freqs[idx],
+                                    y_db,
+                                    str(i),
+                                    horizontalalignment="center",
+                                    verticalalignment="bottom",
+                                    color="c",
+                                    fontstyle="italic",
+                                )
+            else:
+                for tone_freq, label in [(tone1_freq, "F1"), (tone2_freq, "F2")]:
+                    idx = nearest_index(freqs, tone_freq)
+                    y = wmagnitude[idx]
+                    if y > 1e-10:
+                        y_db = 20.0 * math.log10(y)
+                        if y_db > db_range[0]:
+                            ax_freq.text(
+                                freqs[idx],
+                                y_db,
+                                label,
+                                horizontalalignment="center",
+                                verticalalignment="bottom",
+                                color="c",
+                                fontstyle="italic",
+                            )
 
-    if doAvg:
-        if (iCnt < 3):
-            wmagsum = np.zeros(len(flist))
-            wmagdiv = 0
+            info_text = []
+            best = best_freq(prime_freqs)
+            for i, bf in enumerate(best):
+                mark = "*" if abs(chosen_freq - bf) < 1e-6 else " "
+                info_text.append(
+                    plt.text(
+                        0.5 + 1.5 * i,
+                        0.5,
+                        f"{bf:10.5f}Hz{mark}",
+                        transform=fig.dpi_scale_trans,
+                        fontfamily="monospace",
+                        style="italic",
+                    )
+                )
+                mv = 2.5 * 10 ** ((riaa_db(bf) - riaa_1000) / 20)
+                # print(f"{bf:10.5f}Hz {mv:.1f}mV")
+            
+            mode_label = "IMD" if imd_mode else "THD"
 
-        wmagsum = wmagsum + wmag1
-        wmagdiv = wmagdiv + 1
-        wmagnitude = wmagsum / wmagdiv
-    else:
-        wmagnitude = wmag1
+            info_text.extend(
+                [
+                    plt.text(0.5, 0.3, f"Mode : {mode_label}",
+                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
+                    plt.text(0.5, 0.1, f"#W/sr: {cfg.chunk:5d}#/{cfg.sample_rate * 1e-3:4.1f}kHz",
+                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
 
-    # time domain calculations
-    Vpp = np.max(meas) - np.min(meas)
-    Ppeak = np.max(np.square(meas)) / Rload
-    Vrms = rms(meas)
-    Prms = Vrms**2 / Rload
+                    plt.text(2.5, 0.3, f"F1   : {tone1_freq:9.3f}Hz",
+                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
+                    plt.text(2.5, 0.1, f"F2   : {tone2_freq:9.3f}Hz" if imd_mode else f"Base : {fundamental_freq:9.3f}Hz",
+                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
 
-     # freq domain calculations
+                    plt.text(4.5, 0.3, f"Vpp  : {vpp:5.1f}V",
+                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
+                    plt.text(4.5, 0.1, f"Prms : {prms:5.1f}W",
+                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
 
-    THD, THDP = thd_ieee(wmagnitude, mharmonics, cinx)
-    SINAD, SINADP = thdn(wmagnitude, mfundamental, mfilter, fmask)
-    SNR = snr(wmagnitude, mfundamental, mfilter, fmask, mharmonics)
-#    SINAD, SINADP = thdn2(wcomplex, mfundamental, fmask)
-#    SNR = snr2(wcomplex, mfundamental, mharmonics, fmask)
-    ENOB = enob(SNR)
+                    plt.text(6.5, 0.3, f"Vrms : {vrms:5.1f}V",
+                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
+                    plt.text(6.5, 0.1, f"Load : {cfg.load_ohm:3.1f}ohm",
+                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
 
-#    imdMode = checkImd(iifreq)
-#    if imdMode:
-#        IMD, IMDP = imd(w2, iifreq[0], iifreq[1])
+                    plt.text(
+                        8.5, 0.3,
+                        f"IMD  : {imd_db:5.1f}dB ({imd_pct:6.3f}%)" if imd_mode
+                        else f"THD({cfg.thd_harmonics:02d}): {thd_db:5.1f}dB ({thd_pct:6.3f}%)",
+                        transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"
+                    ),
+                    plt.text(
+                        8.5, 0.1,
+                        f"CCIF : {imd_diff_db:5.1f}dB ({imd_diff_pct:6.3f}%)" if imd_mode
+                        else f"THD-N: {sinad_db:5.1f}dB ({sinad_pct:6.3f}%)",
+                        transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"
+                    ),
 
-    if ((iCnt == wrCnt) and (csvfile != "")):
-        print("write file %s" % csvfile)
-        with open(csvfile, 'a') as f:
-            f.write("%f,%f,%f,%f,%f,%f,%f,%f,%f\n" % (ffreq, THD, THDP, SINAD, SINADP, SNR, ENOB, Vrms, Prms))
-            f.close()
-#displaying
-    # manage axles
-    ax2.cla()
-    ax2.set_title('Frequency Domain', loc='left')
-#    ax2.set_xlabel('Frequency')
-#    ax2.set_ylabel('Amplitude')
-    ax2.set_xscale("log")
+                    plt.text(11.5, 0.1, f"SNR  : {snr_db:5.1f}dB  ENOB {enob_bits:3.1f}",
+                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
+                ]
+            )
 
-    ax2.set_xlim(Frange)
-    ax2.xaxis.set_major_formatter(formatterHz)
-    ax2.set_ylim(Wrange)
-    ax2.yaxis.set_major_formatter(formatterDb)
-    ax2.plot(flist[ilist[0]:ilist[1]], clog(wmagnitude[ilist[0]:ilist[1]]), 'b-')
-    if wc is not None:
-        ax2.plot(flist[ilist[0]:ilist[1]], clog(wc[ilist[0]:ilist[1]]), 'g.')
+            plt.pause(0.01)
 
-    if (cinx > 0):
-        for i in range(1, 1 + thdNum):
-            cinxi = cinx * i
-            if (cinxi < len(wmagnitude)):
-                ty = wmagnitude[cinxi]
-                if (ty > 1e-10):
-                    tyd = 20*math.log10(ty)
-                    if (tyd > Wrange[0]):
-                        ax2.text(flist[cinxi], tyd, "%d" % i, horizontalalignment='center', verticalalignment='bottom', color='c', fontstyle='italic')
+            if stable_count == write_after and pic_base:
+                plt.savefig(f"{pic_base}_{fundamental_freq:.0f}Hz{pic_ext}")
 
-# ax2.scatter(cf, 20*np.log10(wa * (mc + mh), 'r')
-    ax2.grid()
+            for item in info_text:
+                item.remove()
 
-    bFreq = bestFreq(plist, ffreq)
-    t = []
-    for i in range(len(bFreq)):
-        c = '*' if abs(wcFreq - bFreq[i]) < 1e-6 else ' '
-        t.append(plt.text(.5 + 1.5*i, .5, "%10.5fHz%c" % (bFreq[i], c, ),
-                transform=fig.dpi_scale_trans, fontfamily='monospace', style='italic'))
-        print("%10.5fHz %.1fmV" % (bFreq[i], 2.5*10**((riaaDb(bFreq[i]) - riaa1000) / 20)))
+        return 0
 
-    t.append(plt.text(.5, .3, "Base : %10.5fHz" % ffreq, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
-    t.append(plt.text(.5, .1, "#W/sr: %5d#/%4.1fkHz" % (chunk, sRate * 1e-3), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
-    t.append(plt.text(2.5, .3, "   Vpp: %5.1fV" % Vpp, transform=fig.dpi_scale_trans,  fontfamily='monospace', weight='bold'))
-    t.append(plt.text(2.5, .1, " Ppeak: %5.1fW" % Ppeak, transform=fig.dpi_scale_trans,  fontfamily='monospace', weight='bold'))
-    t.append(plt.text(4.5, .3, "  Eff: %5.1fV" % Vrms, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
-    t.append(plt.text(4.5, .1, "E Pwr: %5.1fW" % Prms, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
-    t.append(plt.text(6.5, .3,  "Range: %3.1fV" % Vrange[1], transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
-    t.append(plt.text(6.5, .1,  " Load: %3.1fohm" % Rload, transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
-    t.append(plt.text(8.5, .3, "THD(%02d): %5.1fdB (%6.3f%%)" % (thdNum, THD, THDP), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
-    t.append(plt.text(8.5, .1, "  THD-N: %5.1fdB (%6.3f%%)" % (SINAD, SINADP), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
-    t.append(plt.text(11.5, .1, "    SNR: %5.1fdB  ENOB %3.1f" % (SNR, ENOB), transform=fig.dpi_scale_trans, fontfamily='monospace', weight='bold'))
+    except KeyboardInterrupt:
+        return 0
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        try:
+            if stream is not None:
+                stream.stop_stream()
+                stream.close()
+        finally:
+            audio.terminate()
+            plt.close("all")
 
-    plt.pause(.01)
-    if ((iCnt == wrCnt) and (picfile != "")):
-        plt.savefig("%s_%.0fHz%s" % (picfile, ffreq, picfile_ext))
 
-    for i in t:
-        i.remove()
-
+if __name__ == "__main__":
+    raise SystemExit(main())
