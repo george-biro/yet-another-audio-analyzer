@@ -705,17 +705,10 @@ def main() -> int:
         pic_base, pic_ext = os.path.splitext(args.plot) if args.plot else ("", "")
 
         fig, (skip0, ax_time, skip1, ax_freq, skip2) = plt.subplots(
-            5, 1, figsize=(10, 7),
+            5, 1, figsize=(10, 6),
             gridspec_kw={"height_ratios": [0.05, 2.2, 0.15, 6.5, 2]}
         )
 
-#        fig.subplots_adjust(
-#            left=0.07,
-#            right=0.98,
-#            top=0.93,
-#            bottom=0.07,
-#            hspace=0.2
-#        )
         fig.subplots_adjust(
             left=0.07,
             right=0.98,
@@ -847,8 +840,8 @@ def main() -> int:
                 fundamental_mask = np.clip(tone1_mask + tone2_mask, 0.0, 1.0)
                 harmonics_mask = np.zeros_like(mag, dtype=float)
                 analysis_filter = fundamental_mask
-                fundamental_freq = tone1_freq
-                chosen_freq = tone1_freq
+                #fundamental_freq = tone1_freq
+                #chosen_freq = tone1_freq
                 wc = tone1_mask + tone2_mask
 
             if cfg.avg_enabled:
@@ -956,39 +949,55 @@ def main() -> int:
             skip2.cla()
             skip2.axis("off")
 
-            mode_label = "IMD" if imd_mode else "THD"
-
-            line1 = f"MODE:{mode_label:<3}  FFT:{cfg.chunk:6d}  SR:{cfg.sample_rate/1000:6.1f}kHz"
-            line2 = f"F1:{tone1_freq:9.2f}Hz  " + (f"F2:{tone2_freq:9.2f}Hz" if imd_mode else f"BASE:{fundamental_freq:9.2f}Hz")
-            line3 = f"Vpp:{vpp:7.3f}V  Vrms:{vrms:7.3f}V  Prms:{prms:7.3f}W"
-
             if imd_mode:
-                line4 = f"IMD:{imd_db:7.2f}dB ({imd_pct:6.3f}%)  CCIF:{imd_diff_db:7.2f}dB"
-            else:
-                line4 = f"THD:{thd_db:7.2f}dB ({thd_pct:6.3f}%)  THD+N:{sinad_db:7.2f}dB"
+                line1 = (
+                    f"{'F1':<6}{tone1_freq:>8.2f} Hz   "
+                    f"{'F2':<6}{tone2_freq:>8.2f} Hz   "
 
-            line5 = f"SNR:{snr_db:7.2f}dB  ENOB:{enob_bits:5.2f}  LOAD:{cfg.load_ohm:4.1f}Ω"
+                    f"{'IMD':<6}{imd_db:>7.2f} dB ({imd_pct:6.2f} %)   "
+                    f"{'CCIF':<6}{imd_diff_db:>7.2f} dB ({imd_diff_pct:6.3f} %)"
+                )
+            else:
+                line1 = (
+                    f"{'BASE':<6}{tone1_freq:>8.2f} Hz   "
+                    f"{'':<16}    "
+                    f"{'THD':<6}{thd_db:>7.2f} dB ({thd_pct:6.2f} %)   "
+                    f"{'THD+N':<6}{sinad_db:>7.2f} dB ({sinad_pct:6.2f} %)"
+                )
+
+            line2 = (
+                f"{'FFT':<6}{cfg.chunk:>8d}      "
+                f"{'SR':<6}{cfg.sample_rate/1000:>8.1f} kHz  "
+                f"{'SNR':<6}{snr_db:>7.2f} dB              "
+                f"{'ENOB':<6}{enob_bits:>7.2f} bits"
+            )
+
+            line3 = (
+                f"{'Vpp':<6}{vpp:>8.2f} V    "
+                f"{'Vrms':<6}{vrms:>8.2f} V    "
+                f"{'Prms':<6}{prms:>7.2f} W               "
+                f"{'LOAD':<6}{cfg.load_ohm:>7.1f} Ω"
+            )
+
 
             best = best_freq(prime_freqs)
-            ref_line = "REF:" + "".join(f"{bf:7.0f}{'*' if abs(chosen_freq-bf)<1e-6 else ' '}" for bf in best)
 
-            skip2.text(0.01, 0.72, line1, fontfamily="monospace", fontsize=10, va="bottom")
-            skip2.text(0.01, 0.54, line2, fontfamily="monospace", fontsize=10, va="bottom")
+            ref_line = f"{'REF':<6}"
+            for bf in best:
+                mark = "*" if abs(tone1_freq-bf) < 1e-6 else " "
+                ref_line += f"{bf:>10.2f} Hz{mark}  "
 
-            skip2.text(0.01, 0.36, f"Vpp:{vpp:7.3f}V  Vrms:{vrms:7.3f}V", fontfamily="monospace", fontsize=10, va="bottom")
-            skip2.text(0.01, 0.18, f"Prms:{prms:7.3f}W", fontfamily="monospace", fontsize=10, va="bottom")
-
-            skip2.text(0.60, 0.54, line4, fontfamily="monospace", fontsize=10, va="bottom")
-            skip2.text(0.60, 0.36, line5, fontfamily="monospace", fontsize=10, va="bottom")
-
-            skip2.text(0.01, 0.00, ref_line, fontfamily="monospace", fontsize=10, style="italic", va="bottom")
+            skip2.text(0.01, 0.60, line1, fontfamily="monospace", fontsize=10, va="bottom")
+            skip2.text(0.01, 0.40, line2, fontfamily="monospace", fontsize=10, va="bottom")
+            skip2.text(0.01, 0.20, line3, fontfamily="monospace", fontsize=10, va="bottom")
+            skip2.text(0.01, 0.00, ref_line, fontfamily="monospace", fontsize=8, style="italic", va="bottom")
 
             fig.canvas.draw_idle()
             fig.canvas.flush_events()
             time.sleep(0.01)
 
             if stable_count == write_after and pic_base:
-                plt.savefig(f"{pic_base}_{fundamental_freq:.0f}Hz{pic_ext}")
+                plt.savefig(f"{pic_base}_{tone1_freq:.0f}Hz_{tone2_freq:.0f}Hz{pic_ext}")
 
         return 0
 
