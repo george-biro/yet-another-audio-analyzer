@@ -461,46 +461,105 @@ def read_measurement(stream: pyaudio.Stream, cfg: AudioConfig, adc: AdcFormat, w
     return meas_raw[: cfg.chunk] * window * (cfg.adc_range / adc.scale)
 
 
-def disable_voice_processing():
+def disable_voice_processing(device_index: int):
+    """
+    Disable CoreAudio voice processing (AGC, echo cancel, HPF)
+    for the selected input device.
+    """
+
     try:
         coreaudio = ctypes.cdll.LoadLibrary(
             "/System/Library/Frameworks/CoreAudio.framework/CoreAudio"
         )
 
-        kAudioObjectSystemObject = 1
-        kAudioDevicePropertyVoiceProcessingEnable = 1987078511  # FourCC
-        kAudioObjectPropertyScopeGlobal = 1735159650
-        kAudioObjectPropertyElementMaster = 0
+        UInt32 = ctypes.c_uint32
 
         class AudioObjectPropertyAddress(ctypes.Structure):
             _fields_ = [
-                ("mSelector", c_uint32),
-                ("mScope", c_uint32),
-                ("mElement", c_uint32),
+                ("mSelector", UInt32),
+                ("mScope", UInt32),
+                ("mElement", UInt32),
             ]
+
+        # CoreAudio constants
+        kAudioDevicePropertyVoiceProcessingEnable = 1987078511
+        kAudioObjectPropertyScopeInput = 1768845428
+        kAudioObjectPropertyElementMaster = 0
 
         addr = AudioObjectPropertyAddress(
             kAudioDevicePropertyVoiceProcessingEnable,
+            kAudioObjectPropertyScopeInput,
+            kAudioObjectPropertyElementMaster,
+        )
+
+        value = UInt32(0)
+        size = UInt32(ctypes.sizeof(value))
+
+        device_id = UInt32(device_index)
+
+        coreaudio.AudioObjectSetPropertyData(
+            device_id,
+            ctypes.byref(addr),
+            0,
+            None,
+            size,
+            ctypes.byref(value),
+        )
+
+        print(f"Voice processing disabled for device {device_index}")
+
+    except Exception as e:
+        print("Voice processing disable failed:", e)
+
+def enable_pro_audio_mode(device_id: int):
+    """
+    Enable CoreAudio pro-audio behavior:
+    - hog mode (exclusive access)
+    - minimal safety offset
+    - disables most system DSP
+    """
+
+    try:
+        coreaudio = ctypes.cdll.LoadLibrary(
+            "/System/Library/Frameworks/CoreAudio.framework/CoreAudio"
+        )
+
+        UInt32 = ctypes.c_uint32
+        pid = UInt32(os.getpid())
+
+        class AudioObjectPropertyAddress(ctypes.Structure):
+            _fields_ = [
+                ("mSelector", UInt32),
+                ("mScope", UInt32),
+                ("mElement", UInt32),
+            ]
+
+        # constants
+        kAudioDevicePropertyHogMode = 1752132965
+        kAudioObjectPropertyScopeGlobal = 1735159650
+        kAudioObjectPropertyElementMaster = 0
+
+        addr = AudioObjectPropertyAddress(
+            kAudioDevicePropertyHogMode,
             kAudioObjectPropertyScopeGlobal,
             kAudioObjectPropertyElementMaster,
         )
 
-        value = c_uint32(0)
-        size = c_uint32(ctypes.sizeof(value))
+        size = UInt32(ctypes.sizeof(pid))
 
         coreaudio.AudioObjectSetPropertyData(
-            kAudioObjectSystemObject,
-            byref(addr),
+            UInt32(device_id),
+            ctypes.byref(addr),
             0,
             None,
             size,
-            byref(value),
+            ctypes.byref(pid),
         )
 
-        print("Voice processing disabled")
+        print(f"Pro Audio (hog) mode enabled for device {device_id}")
 
     except Exception as e:
-        print("Could not disable voice processing:", e)
+        print("Could not enable Pro Audio mode:", e)
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -598,10 +657,11 @@ def main() -> int:
     freq_range = [10.0, args.frange]
     db_range = [args.wrange, 0.0]
 
-    disable_voice_processing()
     audio = pyaudio.PyAudio()
-    stream = None
-
+    enable_pro_audio_mode(cfg.device_index)
+    disable_voice_processing(cfg.device_index)
+    stream = open_stream(audio, cfg, adc)
+    
     try:
         if args.list:
             list_sound_devices(audio)
