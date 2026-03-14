@@ -158,66 +158,63 @@ def find_top_two_peaks(
     min_rel_level: float,
     min_sep_hz: float,
 ) -> list[int]:
-    """
-    Find up to two significant local maxima inside fmask.
-    min_rel_level: linear amplitude ratio versus strongest peak
-    min_sep_hz: required spacing between peaks
-    """
+
     valid = np.where(fmask > 0.5)[0]
     if len(valid) < 3:
         return []
 
-    candidates = []
-    for i in valid[1:-1]:
-        if wm[i] > wm[i - 1] and wm[i] >= wm[i + 1]:
-            candidates.append(i)
+    mags = wm[valid]
 
-    if not candidates:
-        return []
+    # strongest bins
+    order = np.argsort(mags)[::-1]
 
-    candidates.sort(key=lambda i: wm[i], reverse=True)
-    strongest = wm[candidates[0]]
-    if strongest <= EPS:
-        return []
+    peaks = []
 
-    selected = [candidates[0]]
-    for idx in candidates[1:]:
-        if wm[idx] < strongest * min_rel_level:
+    for k in order:
+
+        idx = valid[k]
+
+        if wm[idx] <= 0:
             continue
-        if all(
-            abs(freqs[idx] - freqs[s]) >= min_sep_hz and
-            abs(freqs[idx] / freqs[s] - round(freqs[idx] / freqs[s])) > 0.05
-            for s in selected
-        ):
-            selected.append(idx)
-            if len(selected) == 2:
-                break
 
-    return sorted(selected, key=lambda i: freqs[i])
+        # check separation
+        if any(abs(freqs[idx] - freqs[p]) < min_sep_hz for p in peaks):
+            continue
+
+        peaks.append(idx)
+
+        if len(peaks) == 2:
+            break
+
+    if not peaks:
+        return []
+
+    # level test
+    strongest = wm[peaks[0]]
+
+    peaks = [p for p in peaks if wm[p] >= strongest * min_rel_level]
+
+    return sorted(peaks, key=lambda i: freqs[i])
 
 
-def calc_peak_freq(
-    wm: np.ndarray,
-    freqs: np.ndarray,
-    center_idx: int,
-    rel_level: float,
-) -> float:
-    """
-    Refine a single-peak frequency from bins around the detected maximum.
-    """
-    peak = wm[center_idx]
-    if peak <= EPS:
-        return freqs[center_idx]
+def calc_peak_freq(wm, freqs, idx, _rel):
 
-    local = np.zeros(len(wm), dtype=float)
-    lo = max(0, center_idx - 2)
-    hi = min(len(wm), center_idx + 3)
-    local[lo:hi] = wm[lo:hi]
-    local[local < peak * rel_level] = 0.0
-    denom = np.sum(local)
-    if denom <= EPS:
-        return freqs[center_idx]
-    return float(np.sum(local * freqs) / denom)
+    if idx <= 0 or idx >= len(wm) - 1:
+        return freqs[idx]
+
+    a = wm[idx - 1]
+    b = wm[idx]
+    c = wm[idx + 1]
+
+    denom = a - 2 * b + c
+    if abs(denom) < 1e-20:
+        return freqs[idx]
+
+    delta = 0.5 * (a - c) / denom
+
+    bin_width = freqs[1] - freqs[0]
+
+    return freqs[idx] + delta * bin_width
 
 
 def imd_total(
