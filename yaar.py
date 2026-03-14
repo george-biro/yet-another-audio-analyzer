@@ -287,19 +287,18 @@ def wclean(ts: np.ndarray, window: np.ndarray, center_freq: float, floor_level: 
     mag[mag < floor_level] = 0.0
     return mag
 
-
 def rms(values: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.square(values))))
 
-
-def thd_ieee(wm: np.ndarray, mh: np.ndarray, carrier_idx: int) -> Tuple[float, float]:
-    vfund = wm[carrier_idx]
+def thd_ieee(wm, mh, carrier_idx):
+    vfund = np.sum(np.square(wm * build_peak_mask(
+        np.arange(len(wm)), carrier_idx, 1)))
     vharm = np.sum(np.square(wm * mh))
     if vfund < 1e-100:
         return float("nan"), float("nan")
-    k = math.sqrt(vharm) / vfund
-    return db_rel(k), 100.0 * k
 
+    k = math.sqrt(vharm / vfund)
+    return db_rel(k), 100*k
 
 def thdn(wm: np.ndarray, mfund: np.ndarray, mfilter: np.ndarray, fmask: np.ndarray) -> Tuple[float, float]:
     vfund = np.sum(np.square(wm * mfund))
@@ -780,7 +779,9 @@ def main() -> int:
 
             # FFT
             spectrum_complex = np.fft.rfft(meas) * fmask
-            mag = normalize_unit(np.abs(spectrum_complex) / len(spectrum_complex))
+            coherent_gain = np.sum(window) / len(window)
+            mag = np.abs(spectrum_complex) / (len(spectrum_complex) * coherent_gain)
+            mag = normalize_unit(mag)
 
             if len(mag) != len(freqs):
                 raise RuntimeError("Spectrum length mismatch.")
@@ -864,7 +865,9 @@ def main() -> int:
             if not imd_mode:
                 thd_db, thd_pct = thd_ieee(wmagnitude, harmonics_mask, carrier_idx)
                 sinad_db, sinad_pct = thdn(wmagnitude, fundamental_mask, analysis_filter, fmask)
-                snr_db = snr(wmagnitude, fundamental_mask, analysis_filter, fmask, harmonics_mask)
+                signal = np.sum(np.square(wmagnitude * fundamental_mask))
+                noise = np.sum(np.square(wmagnitude * (fmask - fundamental_mask)))
+                snr_db = db_rel(math.sqrt(signal/noise))
                 enob_bits = enob(sinad_db)
 
                 imd_db = float("nan")
