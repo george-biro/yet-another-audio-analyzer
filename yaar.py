@@ -373,7 +373,7 @@ def get_adc_format(bits: int) -> AdcFormat:
         # Stored in 32-bit container for PyAudio compatibility.
         return AdcFormat(pyaudio.paInt32, np.int32, 2**24)
     if bits == 32:
-        return AdcFormat(pyaudio.paInt32, np.int32, 2**31)
+        return AdcFormat(pyaudio.paFloat32, np.float32, 1.0)
     raise ValueError("Invalid ADC resolution. Use 16, 24, or 32.")
 
 
@@ -419,6 +419,9 @@ def simulate_signal(
         signal += np.random.normal(0.0, noise_amp, len(signal))
     return signal * window
 
+def get_coreaudio_device_id(audio: pyaudio.PyAudio, pa_index: int) -> int:
+    info = audio.get_device_info_by_index(pa_index)
+    return int(info["index"])
 
 def open_stream(audio: pyaudio.PyAudio, cfg: AudioConfig, adc: AdcFormat) -> Optional[pyaudio.Stream]:
     if cfg.device_index < 0 or cfg.sim_freq >= 0.01:
@@ -460,6 +463,44 @@ def read_measurement(stream: pyaudio.Stream, cfg: AudioConfig, adc: AdcFormat, w
     meas_raw = meas_full[cfg.channel_select :: cfg.channel_count]
     return meas_raw[: cfg.chunk] * window * (cfg.adc_range / adc.scale)
 
+def disable_safety_offset(device_id: int):
+
+    coreaudio = ctypes.cdll.LoadLibrary(
+        "/System/Library/Frameworks/CoreAudio.framework/CoreAudio"
+    )
+
+    UInt32 = ctypes.c_uint32
+
+    class AudioObjectPropertyAddress(ctypes.Structure):
+        _fields_ = [
+            ("mSelector", UInt32),
+            ("mScope", UInt32),
+            ("mElement", UInt32),
+        ]
+
+    kAudioDevicePropertySafetyOffset = 1935764583
+    kAudioObjectPropertyScopeInput = 1768845428
+    kAudioObjectPropertyElementMaster = 0
+
+    addr = AudioObjectPropertyAddress(
+        kAudioDevicePropertySafetyOffset,
+        kAudioObjectPropertyScopeInput,
+        kAudioObjectPropertyElementMaster,
+    )
+
+    value = UInt32(0)
+    size = UInt32(ctypes.sizeof(value))
+
+    coreaudio.AudioObjectSetPropertyData(
+        UInt32(device_id),
+        ctypes.byref(addr),
+        0,
+        None,
+        size,
+        ctypes.byref(value),
+    )
+
+    print("Safety offset disabled")
 
 def disable_voice_processing(device_index: int):
     """
@@ -658,9 +699,10 @@ def main() -> int:
     db_range = [args.wrange, 0.0]
 
     audio = pyaudio.PyAudio()
-    enable_pro_audio_mode(cfg.device_index)
-    disable_voice_processing(cfg.device_index)
-    stream = open_stream(audio, cfg, adc)
+    device_id = get_coreaudio_device_id(audio, cfg.device_index)
+    disable_voice_processing(device_id)
+    disable_safety_offset(device_id)
+    enable_pro_audio_mode(device_id)
     
     try:
         if args.list:
