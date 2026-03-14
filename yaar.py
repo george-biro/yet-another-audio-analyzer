@@ -94,20 +94,16 @@ def riaa_db(freq_hz: float) -> float:
 def db_rel(k: float) -> float:
     return float("nan") if k <= 0 else 20.0 * math.log10(k)
 
-
 def db_pow(k: float) -> float:
     return float("nan") if k <= 0 else 10.0 * math.log10(k)
 
-
 def from_db(db: float) -> float:
     return 10.0 ** (db / 20.0)
-
 
 def notch(values: np.ndarray, level: float) -> np.ndarray:
     mask = np.zeros_like(values, dtype=float)
     mask[values > level] = 1.0
     return mask
-
 
 def carrier(
     spectrum: np.ndarray, num_harmonics: int, freq_mask: np.ndarray, level: float
@@ -139,7 +135,6 @@ def build_peak_mask(freqs: np.ndarray, center_freq: float, half_width_hz: float)
     mask[(freqs >= lo) & (freqs <= hi)] = 1.0
     return mask
 
-
 def peak_band_from_synth(
     ts: np.ndarray,
     window: np.ndarray,
@@ -149,7 +144,6 @@ def peak_band_from_synth(
 ) -> np.ndarray:
     wc = wclean(ts, window, center_freq, floor_level)
     return notch(wc, 1e-20)
-
 
 def find_top_two_peaks(
     wm: np.ndarray,
@@ -196,7 +190,6 @@ def find_top_two_peaks(
 
     return sorted(peaks, key=lambda i: freqs[i])
 
-
 def calc_peak_freq(wm, freqs, idx, _rel):
 
     if idx <= 0 or idx >= len(wm) - 1:
@@ -215,7 +208,6 @@ def calc_peak_freq(wm, freqs, idx, _rel):
     bin_width = freqs[1] - freqs[0]
 
     return freqs[idx] + delta * bin_width
-
 
 def imd_total(
     wm: np.ndarray,
@@ -239,7 +231,6 @@ def imd_total(
 
     k = math.sqrt(vdist / vsig)
     return db_rel(k), 100.0 * k
-
 
 def imd_ccif_difference(
     wm: np.ndarray,
@@ -714,7 +705,23 @@ def main() -> int:
         pic_base, pic_ext = os.path.splitext(args.plot) if args.plot else ("", "")
 
         fig, (skip0, ax_time, skip1, ax_freq, skip2) = plt.subplots(
-            5, 1, figsize=(10, 6), gridspec_kw={"height_ratios": [0.1, 2, 0.01, 6, 0.5]}
+            5, 1, figsize=(10, 7),
+            gridspec_kw={"height_ratios": [0.05, 2.2, 0.15, 6.5, 2]}
+        )
+
+#        fig.subplots_adjust(
+#            left=0.07,
+#            right=0.98,
+#            top=0.93,
+#            bottom=0.07,
+#            hspace=0.2
+#        )
+        fig.subplots_adjust(
+            left=0.07,
+            right=0.98,
+            top=0.93,
+            bottom=0.0,
+            hspace=0.25
         )
 
         closed = {"value": False}
@@ -724,10 +731,9 @@ def main() -> int:
 
         fig.canvas.mpl_connect("close_event", on_close)
         fig.suptitle("Yet Another Audio analyzeR")
-        fig.tight_layout()
-        fig.subplots_adjust(left=0.06, hspace=None)
         skip0.axis("off")
         skip1.axis("off")
+        skip2.cla()
         skip2.axis("off")
 
         formatter_s = EngFormatter(unit="s")
@@ -945,65 +951,37 @@ def main() -> int:
                                 color="c",
                                 fontstyle="italic",
                             )
-
-            info_text = []
-            best = best_freq(prime_freqs)
-            for i, bf in enumerate(best):
-                mark = "*" if abs(chosen_freq - bf) < 1e-6 else " "
-                info_text.append(
-                    plt.text(
-                        0.5 + 1.5 * i,
-                        0.5,
-                        f"{bf:10.5f}Hz{mark}",
-                        transform=fig.dpi_scale_trans,
-                        fontfamily="monospace",
-                        style="italic",
-                    )
-                )
-                mv = 2.5 * 10 ** ((riaa_db(bf) - riaa_1000) / 20)
-                # print(f"{bf:10.5f}Hz {mv:.1f}mV")
             
+            # ---- Status panel (bottom axis) ----
+            skip2.cla()
+            skip2.axis("off")
+
             mode_label = "IMD" if imd_mode else "THD"
 
-            info_text.extend(
-                [
-                    plt.text(0.5, 0.3, f"Mode : {mode_label}",
-                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
-                    plt.text(0.5, 0.1, f"#W/sr: {cfg.chunk:5d}#/{cfg.sample_rate * 1e-3:4.1f}kHz",
-                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
+            line1 = f"MODE:{mode_label:<3}  FFT:{cfg.chunk:6d}  SR:{cfg.sample_rate/1000:6.1f}kHz"
+            line2 = f"F1:{tone1_freq:9.2f}Hz  " + (f"F2:{tone2_freq:9.2f}Hz" if imd_mode else f"BASE:{fundamental_freq:9.2f}Hz")
+            line3 = f"Vpp:{vpp:7.3f}V  Vrms:{vrms:7.3f}V  Prms:{prms:7.3f}W"
 
-                    plt.text(2.5, 0.3, f"F1   : {tone1_freq:9.3f}Hz",
-                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
-                    plt.text(2.5, 0.1, f"F2   : {tone2_freq:9.3f}Hz" if imd_mode else f"Base : {fundamental_freq:9.3f}Hz",
-                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
+            if imd_mode:
+                line4 = f"IMD:{imd_db:7.2f}dB ({imd_pct:6.3f}%)  CCIF:{imd_diff_db:7.2f}dB"
+            else:
+                line4 = f"THD:{thd_db:7.2f}dB ({thd_pct:6.3f}%)  THD+N:{sinad_db:7.2f}dB"
 
-                    plt.text(4.5, 0.3, f"Vpp  : {vpp:5.1f}V",
-                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
-                    plt.text(4.5, 0.1, f"Prms : {prms:5.1f}W",
-                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
+            line5 = f"SNR:{snr_db:7.2f}dB  ENOB:{enob_bits:5.2f}  LOAD:{cfg.load_ohm:4.1f}Ω"
 
-                    plt.text(6.5, 0.3, f"Vrms : {vrms:5.1f}V",
-                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
-                    plt.text(6.5, 0.1, f"Load : {cfg.load_ohm:3.1f}ohm",
-                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
+            best = best_freq(prime_freqs)
+            ref_line = "REF:" + "".join(f"{bf:7.0f}{'*' if abs(chosen_freq-bf)<1e-6 else ' '}" for bf in best)
 
-                    plt.text(
-                        8.5, 0.3,
-                        f"IMD  : {imd_db:5.1f}dB ({imd_pct:6.3f}%)" if imd_mode
-                        else f"THD({cfg.thd_harmonics:02d}): {thd_db:5.1f}dB ({thd_pct:6.3f}%)",
-                        transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"
-                    ),
-                    plt.text(
-                        8.5, 0.1,
-                        f"CCIF : {imd_diff_db:5.1f}dB ({imd_diff_pct:6.3f}%)" if imd_mode
-                        else f"THD-N: {sinad_db:5.1f}dB ({sinad_pct:6.3f}%)",
-                        transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"
-                    ),
+            skip2.text(0.01, 0.72, line1, fontfamily="monospace", fontsize=10, va="bottom")
+            skip2.text(0.01, 0.54, line2, fontfamily="monospace", fontsize=10, va="bottom")
 
-                    plt.text(11.5, 0.1, f"SNR  : {snr_db:5.1f}dB  ENOB {enob_bits:3.1f}",
-                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
-                ]
-            )
+            skip2.text(0.01, 0.36, f"Vpp:{vpp:7.3f}V  Vrms:{vrms:7.3f}V", fontfamily="monospace", fontsize=10, va="bottom")
+            skip2.text(0.01, 0.18, f"Prms:{prms:7.3f}W", fontfamily="monospace", fontsize=10, va="bottom")
+
+            skip2.text(0.60, 0.54, line4, fontfamily="monospace", fontsize=10, va="bottom")
+            skip2.text(0.60, 0.36, line5, fontfamily="monospace", fontsize=10, va="bottom")
+
+            skip2.text(0.01, 0.00, ref_line, fontfamily="monospace", fontsize=10, style="italic", va="bottom")
 
             fig.canvas.draw_idle()
             fig.canvas.flush_events()
@@ -1011,9 +989,6 @@ def main() -> int:
 
             if stable_count == write_after and pic_base:
                 plt.savefig(f"{pic_base}_{fundamental_freq:.0f}Hz{pic_ext}")
-
-            for item in info_text:
-                item.remove()
 
         return 0
 
