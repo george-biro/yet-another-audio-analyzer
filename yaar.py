@@ -648,6 +648,91 @@ def init_csv(path: str) -> None:
                 "THDN_dB,THDN_pct,SNR_dB,ENOB,Vrms,Prms\n"
             )
 
+def compute_fft(meas, window, fmask):
+    spectrum_complex = np.fft.rfft(meas) * fmask
+    coherent_gain = np.sum(window) / len(window)
+    mag = np.abs(spectrum_complex) / (len(spectrum_complex) * coherent_gain)
+    return normalize_unit(mag)
+
+def plot_time(ax_time, ts, meas, time_range, voltage_range, formatter_s, formatter_v):
+    ax_time.cla()
+    ax_time.set_title("Time Domain", loc="left")
+    ax_time.set_xlim(time_range)
+    ax_time.set_ylim(voltage_range)
+    ax_time.xaxis.set_major_formatter(formatter_s)
+    ax_time.yaxis.set_major_formatter(formatter_v)
+    ax_time.plot(ts, meas, "r")
+    ax_time.grid()
+
+def plot_freq(ax_freq, freqs, wmagnitude, wc, i_lo, i_hi,
+              freq_range, db_range, formatter_hz, formatter_db):
+
+    ax_freq.cla()
+    ax_freq.set_title("Frequency Domain", loc="left")
+    ax_freq.set_xscale("log")
+    ax_freq.set_xlim(freq_range)
+    ax_freq.set_ylim(db_range)
+
+    ax_freq.xaxis.set_major_formatter(formatter_hz)
+    ax_freq.yaxis.set_major_formatter(formatter_db)
+
+    ax_freq.plot(freqs[i_lo:i_hi], clean_log(wmagnitude[i_lo:i_hi]), "b-")
+    ax_freq.plot(freqs[i_lo:i_hi], clean_log(wc[i_lo:i_hi]), "g.")
+    ax_freq.grid()
+
+def render_status(skip2, imd_mode,
+                  tone1_freq, tone2_freq,
+                  thd_db, thd_pct,
+                  imd_db, imd_pct,
+                  imd_diff_db, imd_diff_pct,
+                  sinad_db, sinad_pct,
+                  snr_db, enob_bits,
+                  vpp, vrms, prms,
+                  cfg, prime_freqs):
+
+    skip2.cla()
+    skip2.axis("off")
+
+    if imd_mode:
+        line1 = (
+            f"{'F1':<6}{tone1_freq:>8.2f} Hz   "
+            f"{'F2':<6}{tone2_freq:>8.2f} Hz   "
+            f"{'IMD':<6}{imd_db:>7.2f} dB ({imd_pct:6.2f} %)   "
+            f"{'CCIF':<6}{imd_diff_db:>7.2f} dB ({imd_diff_pct:6.3f} %)"
+        )
+    else:
+        line1 = (
+            f"{'BASE':<6}{tone1_freq:>8.2f} Hz   "
+            f"{'':<16}    "
+            f"{'THD':<6}{thd_db:>7.2f} dB ({thd_pct:6.2f} %)   "
+            f"{'THD+N':<6}{sinad_db:>7.2f} dB ({sinad_pct:6.2f} %)"
+        )
+
+    line2 = (
+        f"{'FFT':<6}{cfg.chunk:>8d}      "
+        f"{'SR':<6}{cfg.sample_rate/1000:>8.1f} kHz  "
+        f"{'SNR':<6}{snr_db:>7.2f} dB              "
+        f"{'ENOB':<6}{enob_bits:>7.2f} bits"
+    )
+
+    line3 = (
+        f"{'Vpp':<6}{vpp:>8.2f} V    "
+        f"{'Vrms':<6}{vrms:>8.2f} V    "
+        f"{'Prms':<6}{prms:>7.2f} W               "
+        f"{'LOAD':<6}{cfg.load_ohm:>7.1f} Ω"
+    )
+
+    best = best_freq(prime_freqs)
+
+    ref_line = f"{'REF':<6}"
+    for bf in best:
+        mark = "*" if abs(tone1_freq - bf) < 1e-6 else " "
+        ref_line += f"{bf:>10.2f} Hz{mark}  "
+
+    skip2.text(0.01,0.60,line1,fontfamily="monospace",fontsize=10)
+    skip2.text(0.01,0.40,line2,fontfamily="monospace",fontsize=10)
+    skip2.text(0.01,0.20,line3,fontfamily="monospace",fontsize=10)
+    skip2.text(0.01,0.00,ref_line,fontfamily="monospace",fontsize=8,style="italic")
 
 def main() -> int:
     parser = build_parser()
@@ -768,20 +853,10 @@ def main() -> int:
                 raise RuntimeError("Measurement buffer too short.")
 
             # Time-domain plot
-            ax_time.cla()
-            ax_time.set_title("Time Domain", loc="left")
-            ax_time.set_xlim(time_range)
-            ax_time.set_ylim(voltage_range)
-            ax_time.xaxis.set_major_formatter(formatter_s)
-            ax_time.yaxis.set_major_formatter(formatter_v)
-            ax_time.plot(ts, meas, "r")
-            ax_time.grid()
+            plot_time(ax_time, ts, meas, time_range, voltage_range, formatter_s, formatter_v)
 
             # FFT
-            spectrum_complex = np.fft.rfft(meas) * fmask
-            coherent_gain = np.sum(window) / len(window)
-            mag = np.abs(spectrum_complex) / (len(spectrum_complex) * coherent_gain)
-            mag = normalize_unit(mag)
+            mag = compute_fft(meas, window, fmask)
 
             if len(mag) != len(freqs):
                 raise RuntimeError("Spectrum length mismatch.")
@@ -902,17 +977,8 @@ def main() -> int:
                         f"{sinad_db},{sinad_pct},{snr_db},{enob_bits},{vrms},{prms}\n"
                     )
 
-            # Frequency-domain plot
-            ax_freq.cla()
-            ax_freq.set_title("Frequency Domain", loc="left")
-            ax_freq.set_xscale("log")
-            ax_freq.set_xlim(freq_range)
-            ax_freq.set_ylim(db_range)
-            ax_freq.xaxis.set_major_formatter(formatter_hz)
-            ax_freq.yaxis.set_major_formatter(formatter_db)
-            ax_freq.plot(freqs[i_lo:i_hi], clean_log(wmagnitude[i_lo:i_hi]), "b-")
-            ax_freq.plot(freqs[i_lo:i_hi], clean_log(wc[i_lo:i_hi]), "g.")
-            ax_freq.grid()
+            plot_freq(ax_freq, freqs, wmagnitude, wc, i_lo, i_hi,
+                    freq_range, db_range, formatter_hz, formatter_db)
 
             if not imd_mode and carrier_idx > 0:
                 for i in range(1, 1 + cfg.thd_harmonics):
@@ -948,52 +1014,15 @@ def main() -> int:
                                 fontstyle="italic",
                             )
             
-            # ---- Status panel (bottom axis) ----
-            skip2.cla()
-            skip2.axis("off")
-
-            if imd_mode:
-                line1 = (
-                    f"{'F1':<6}{tone1_freq:>8.2f} Hz   "
-                    f"{'F2':<6}{tone2_freq:>8.2f} Hz   "
-
-                    f"{'IMD':<6}{imd_db:>7.2f} dB ({imd_pct:6.2f} %)   "
-                    f"{'CCIF':<6}{imd_diff_db:>7.2f} dB ({imd_diff_pct:6.3f} %)"
-                )
-            else:
-                line1 = (
-                    f"{'BASE':<6}{tone1_freq:>8.2f} Hz   "
-                    f"{'':<16}    "
-                    f"{'THD':<6}{thd_db:>7.2f} dB ({thd_pct:6.2f} %)   "
-                    f"{'THD+N':<6}{sinad_db:>7.2f} dB ({sinad_pct:6.2f} %)"
-                )
-
-            line2 = (
-                f"{'FFT':<6}{cfg.chunk:>8d}      "
-                f"{'SR':<6}{cfg.sample_rate/1000:>8.1f} kHz  "
-                f"{'SNR':<6}{snr_db:>7.2f} dB              "
-                f"{'ENOB':<6}{enob_bits:>7.2f} bits"
-            )
-
-            line3 = (
-                f"{'Vpp':<6}{vpp:>8.2f} V    "
-                f"{'Vrms':<6}{vrms:>8.2f} V    "
-                f"{'Prms':<6}{prms:>7.2f} W               "
-                f"{'LOAD':<6}{cfg.load_ohm:>7.1f} Ω"
-            )
-
-
-            best = best_freq(prime_freqs)
-
-            ref_line = f"{'REF':<6}"
-            for bf in best:
-                mark = "*" if abs(tone1_freq-bf) < 1e-6 else " "
-                ref_line += f"{bf:>10.2f} Hz{mark}  "
-
-            skip2.text(0.01, 0.60, line1, fontfamily="monospace", fontsize=10, va="bottom")
-            skip2.text(0.01, 0.40, line2, fontfamily="monospace", fontsize=10, va="bottom")
-            skip2.text(0.01, 0.20, line3, fontfamily="monospace", fontsize=10, va="bottom")
-            skip2.text(0.01, 0.00, ref_line, fontfamily="monospace", fontsize=8, style="italic", va="bottom")
+            render_status(skip2, imd_mode,
+                  tone1_freq, tone2_freq,
+                  thd_db, thd_pct,
+                  imd_db, imd_pct,
+                  imd_diff_db, imd_diff_pct,
+                  sinad_db, sinad_pct,
+                  snr_db, enob_bits,
+                  vpp, vrms, prms,
+                  cfg, prime_freqs)
 
             fig.canvas.draw_idle()
             fig.canvas.flush_events()
