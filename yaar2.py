@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import ctypes
+from ctypes import c_uint32, c_void_p, byref
 import argparse
 import math
 import os
@@ -50,13 +52,15 @@ class AudioConfig:
     window_name: str
     avg_enabled: bool
     sim_freq: float
+    sim_freq2: float
     sim_noise: float
     thd_harmonics: int
     flt_threshold: float
     fnd_threshold: float
     frq_threshold: float
     center_freq_threshold: float
-
+    two_tone_rel_db: float
+    peak_min_separation_hz: float
 
 @dataclass
 class AdcFormat:
@@ -126,6 +130,147 @@ def carrier(
 
     return carrier_idx, fundamental_mask, harmonics_mask
 
+def build_peak_mask(freqs: np.ndarray, center_freq: float, half_width_hz: float) -> np.ndarray:
+    mask = np.zeros(len(freqs), dtype=float)
+    if center_freq <= 0:
+        return mask
+    lo = center_freq - half_width_hz
+    hi = center_freq + half_width_hz
+    mask[(freqs >= lo) & (freqs <= hi)] = 1.0
+    return mask
+
+
+def peak_band_from_synth(
+    ts: np.ndarray,
+    window: np.ndarray,
+    freqs: np.ndarray,
+    center_freq: float,
+    floor_level: float,
+) -> np.ndarray:
+    wc = wclean(ts, window, center_freq, floor_level)
+    return notch(wc, 1e-20)
+
+
+def find_top_two_peaks(
+    wm: np.ndarray,
+    freqs: np.ndarray,
+    fmask: np.ndarray,
+    min_rel_level: float,
+    min_sep_hz: float,
+) -> list[int]:
+    """
+    Find up to two significant local maxima inside fmask.
+    min_rel_level: linear amplitude ratio versus strongest peak
+    min_sep_hz: required spacing between peaks
+    """
+    valid = np.where(fmask > 0.5)[0]
+    if len(valid) < 3:
+        return []
+
+    candidates = []
+    for i in valid[1:-1]:
+        if wm[i] > wm[i - 1] and wm[i] >= wm[i + 1]:
+            candidates.append(i)
+
+    if not candidates:
+        return []
+
+    candidates.sort(key=lambda i: wm[i], reverse=True)
+    strongest = wm[candidates[0]]
+    if strongest <= EPS:
+        return []
+
+    selected = [candidates[0]]
+    for idx in candidates[1:]:
+        if wm[idx] < strongest * min_rel_level:
+            continue
+        if all(
+            abs(freqs[idx] - freqs[s]) >= min_sep_hz and
+            abs(freqs[idx] / freqs[s] - round(freqs[idx] / freqs[s])) > 0.05
+            for s in selected
+        ):
+            selected.append(idx)
+            if len(selected) == 2:
+                break
+
+    return sorted(selected, key=lambda i: freqs[i])
+
+
+def calc_peak_freq(
+    wm: np.ndarray,
+    freqs: np.ndarray,
+    center_idx: int,
+    rel_level: float,
+) -> float:
+    """
+    Refine a single-peak frequency from bins around the detected maximum.
+    """
+    peak = wm[center_idx]
+    if peak <= EPS:
+        return freqs[center_idx]
+
+    local = np.zeros(len(wm), dtype=float)
+    lo = max(0, center_idx - 2)
+    hi = min(len(wm), center_idx + 3)
+    local[lo:hi] = wm[lo:hi]
+    local[local < peak * rel_level] = 0.0
+    denom = np.sum(local)
+    if denom <= EPS:
+        return freqs[center_idx]
+    return float(np.sum(local * freqs) / denom)
+
+
+def imd_total(
+    wm: np.ndarray,
+    mfund1: np.ndarray,
+    mfund2: np.ndarray,
+    fmask: np.ndarray,
+) -> tuple[float, float]:
+    """
+    General-purpose IMD metric:
+    unwanted energy divided by wanted energy, where wanted energy
+    is the sum of the two fundamentals.
+    """
+    msig = np.clip(mfund1 + mfund2, 0.0, 1.0)
+    mnoise = np.clip(fmask - msig, 0.0, 1.0)
+
+    vsig = np.sum(np.square(wm * msig))
+    vdist = np.sum(np.square(wm * mnoise))
+
+    if vsig < 1e-100:
+        return float("nan"), float("nan")
+
+    k = math.sqrt(vdist / vsig)
+    return db_rel(k), 100.0 * k
+
+
+def imd_ccif_difference(
+    wm: np.ndarray,
+    freqs: np.ndarray,
+    f1: float,
+    f2: float,
+    half_width_hz: float,
+) -> tuple[float, float, float]:
+    """
+    For CCIF-like two-tone tests, report the difference product |f2-f1|.
+    Returns: product frequency, level relative to RMS of the two tones, percent
+    """
+    fd = abs(f2 - f1)
+    if fd <= 0:
+        return float("nan"), float("nan"), float("nan")
+
+    diff_mask = build_peak_mask(freqs, fd, half_width_hz)
+    vdiff = np.sum(np.square(wm * diff_mask))
+
+    m1 = build_peak_mask(freqs, f1, half_width_hz)
+    m2 = build_peak_mask(freqs, f2, half_width_hz)
+    vref = np.sum(np.square(wm * (m1 + m2)))
+
+    if vref < 1e-100:
+        return fd, float("nan"), float("nan")
+
+    k = math.sqrt(vdiff / vref)
+    return fd, db_rel(k), 100.0 * k
 
 def calc_f_freq(spectrum: np.ndarray, freqs: np.ndarray, level: float) -> float:
     weighted = notch(spectrum, level) * spectrum
@@ -213,7 +358,7 @@ def prime_freq_list(freqs: np.ndarray, mask: np.ndarray) -> np.ndarray:
             out.append(freqs[i])
     return np.array(out, dtype=float)
 
-def best_freq(prime_list: np.ndarray, freq: float) -> np.ndarray:
+def best_freq(prime_list: np.ndarray) -> np.ndarray:
     if len(prime_list) == 0:
         return np.array([], dtype=float)
 
@@ -259,10 +404,19 @@ def get_window(name: str, chunk: int) -> np.ndarray:
     raise ValueError(f"Unsupported window: {name}")
 
 
-def simulate_signal(freq_hz: float, noise_amp: float, ts: np.ndarray, window: np.ndarray) -> np.ndarray:
+def simulate_signal(
+    freq_hz: float,
+    noise_amp: float,
+    ts: np.ndarray,
+    window: np.ndarray,
+    freq2_hz: float = 0.0,
+    amp2: float = 1.0,
+) -> np.ndarray:
     signal = np.sin(2.0 * np.pi * freq_hz * ts + random.random() * np.pi)
+    if freq2_hz > 0.0:
+        signal += amp2 * np.sin(2.0 * np.pi * freq2_hz * ts + random.random() * np.pi)
     if noise_amp > 1e-6:
-        signal = signal + np.random.normal(0.0, noise_amp, len(signal))
+        signal += np.random.normal(0.0, noise_amp, len(signal))
     return signal * window
 
 
@@ -307,6 +461,47 @@ def read_measurement(stream: pyaudio.Stream, cfg: AudioConfig, adc: AdcFormat, w
     return meas_raw[: cfg.chunk] * window * (cfg.adc_range / adc.scale)
 
 
+def disable_voice_processing():
+    try:
+        coreaudio = ctypes.cdll.LoadLibrary(
+            "/System/Library/Frameworks/CoreAudio.framework/CoreAudio"
+        )
+
+        kAudioObjectSystemObject = 1
+        kAudioDevicePropertyVoiceProcessingEnable = 1987078511  # FourCC
+        kAudioObjectPropertyScopeGlobal = 1735159650
+        kAudioObjectPropertyElementMaster = 0
+
+        class AudioObjectPropertyAddress(ctypes.Structure):
+            _fields_ = [
+                ("mSelector", c_uint32),
+                ("mScope", c_uint32),
+                ("mElement", c_uint32),
+            ]
+
+        addr = AudioObjectPropertyAddress(
+            kAudioDevicePropertyVoiceProcessingEnable,
+            kAudioObjectPropertyScopeGlobal,
+            kAudioObjectPropertyElementMaster,
+        )
+
+        value = c_uint32(0)
+        size = c_uint32(ctypes.sizeof(value))
+
+        coreaudio.AudioObjectSetPropertyData(
+            kAudioObjectSystemObject,
+            byref(addr),
+            0,
+            None,
+            size,
+            byref(value),
+        )
+
+        print("Voice processing disabled")
+
+    except Exception as e:
+        print("Could not disable voice processing:", e)
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="Yet Another Audio Analyzer",
@@ -340,6 +535,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fndtsh", type=float, default=3.0, help="Fundamental voltage threshold in dB")
     parser.add_argument("--frqtsh", type=float, default=40.0, help="Fundamental frequency threshold in dB")
     parser.add_argument("--cftsh", type=float, default=0.25, help="Center frequency threshold in Hz")
+    parser.add_argument(
+        "--twotone-rel-db",
+        type=float,
+        default=16.0,
+        help="Second tone must be within this many dB of the main tone to enter IMD mode",
+    )
+    parser.add_argument(
+        "--peak-sep-hz",
+        type=float,
+        default=20.0,
+        help="Minimum separation between two fundamentals in Hz for IMD detection",
+    )
+    parser.add_argument("--simfreq2", type=float, default=0.0,
+                    help="Second simulated tone frequency")
 
     return parser
 
@@ -347,7 +556,10 @@ def build_parser() -> argparse.ArgumentParser:
 def init_csv(path: str) -> None:
     if path and not os.path.isfile(path):
         with open(path, "w", encoding="utf-8") as f:
-            f.write("Carrier,THD_dB,THD_pct,THDN_dB,THDN_pct,SNR_dB,ENOB,Vrms,Prms\n")
+            f.write(
+                "Mode,F1,F2,THD_dB,THD_pct,IMD_dB,IMD_pct,CCIF_diff_Hz,CCIF_diff_dB,CCIF_diff_pct,"
+                "THDN_dB,THDN_pct,SNR_dB,ENOB,Vrms,Prms\n"
+            )
 
 
 def main() -> int:
@@ -371,18 +583,22 @@ def main() -> int:
         window_name=args.window,
         avg_enabled=args.avg,
         sim_freq=args.simfreq,
+        sim_freq2=args.simfreq2,
         sim_noise=noise_from_db(args.simnoise),
         thd_harmonics=args.thd,
         flt_threshold=from_db(-args.flttsh),
         fnd_threshold=from_db(-args.fndtsh),
         frq_threshold=from_db(-args.frqtsh),
         center_freq_threshold=args.cftsh,
+        two_tone_rel_db=args.twotone_rel_db,
+        peak_min_separation_hz=args.peak_sep_hz,
     )
 
     voltage_range = [-args.vrange, args.vrange]
     freq_range = [10.0, args.frange]
     db_range = [args.wrange, 0.0]
 
+    disable_voice_processing()
     audio = pyaudio.PyAudio()
     stream = None
 
@@ -441,11 +657,11 @@ def main() -> int:
         write_after = 10 if cfg.avg_enabled else 3
 
         stream = open_stream(audio, cfg, adc)
-
+        
         t_start = time.time()
         while (time.time() - t_start < cfg.duration_s) and not closed["value"]:
             if stream is None:
-                meas = simulate_signal(cfg.sim_freq, cfg.sim_noise, ts, window)
+                meas = simulate_signal(cfg.sim_freq, cfg.sim_noise, ts, window, cfg.sim_freq2)
             else:
                 meas = read_measurement(stream, cfg, adc, window)
 
@@ -469,15 +685,18 @@ def main() -> int:
             if len(mag) != len(freqs):
                 raise RuntimeError("Spectrum length mismatch.")
 
-            carrier_idx, fundamental_mask, harmonics_mask = carrier(
-                mag, cfg.thd_harmonics, fmask, cfg.fnd_threshold
+            peak_indices = find_top_two_peaks(
+                mag,
+                freqs,
+                fmask,
+                min_rel_level = 10 ** (-cfg.two_tone_rel_db / 20),
+                min_sep_hz=cfg.peak_min_separation_hz,
             )
 
-            if np.sum(harmonics_mask) >= np.sum(fmask):
-                raise RuntimeError("Harmonics mask overflowed analysis band.")
+            imd_mode = len(peak_indices) >= 2
 
+            carrier_idx = peak_indices[0] if peak_indices else int(np.argmax(mag))
             carrier_freq = freqs[carrier_idx]
-            fundamental_freq = calc_f_freq(mag, freqs, cfg.frq_threshold)
 
             if prev_carrier_idx == carrier_idx:
                 stable_count += 1
@@ -485,14 +704,45 @@ def main() -> int:
                 stable_count = 0
             prev_carrier_idx = carrier_idx
 
-            chosen_freq = (
-                carrier_freq
-                if abs(fundamental_freq - carrier_freq) < cfg.center_freq_threshold
-                else fundamental_freq
-            )
+            wc = np.zeros_like(mag)
+            if not imd_mode:
+                fundamental_mask = notch(mag, mag[carrier_idx] * cfg.fnd_threshold)
+                harmonics_mask = np.zeros_like(mag, dtype=float)
 
-            wc = wclean(ts, window, chosen_freq, cfg.flt_threshold)
-            analysis_filter = notch(wc, 1e-20) * fmask
+                if carrier_idx > 0:
+                    harmonics_mask[carrier_idx::carrier_idx][: cfg.thd_harmonics] = 1.0
+                    harmonics_mask[carrier_idx] = 0.0
+                    harmonics_mask *= fmask
+
+                fundamental_freq = calc_peak_freq(mag, freqs, carrier_idx, cfg.frq_threshold)
+                chosen_freq = (
+                    carrier_freq
+                    if abs(fundamental_freq - carrier_freq) < cfg.center_freq_threshold
+                    else fundamental_freq
+                )
+
+                wc = wclean(ts, window, chosen_freq, cfg.flt_threshold)
+                analysis_filter = notch(wc, 1e-20) * fmask
+
+                tone1_freq = chosen_freq
+                tone2_freq = 0.0
+                tone1_mask = fundamental_mask
+                tone2_mask = np.zeros_like(mag, dtype=float)
+
+            else:
+                idx1, idx2 = peak_indices[:2]
+                tone1_freq = calc_peak_freq(mag, freqs, idx1, cfg.frq_threshold)
+                tone2_freq = calc_peak_freq(mag, freqs, idx2, cfg.frq_threshold)
+
+                tone1_mask = peak_band_from_synth(ts, window, freqs, tone1_freq, cfg.flt_threshold) * fmask
+                tone2_mask = peak_band_from_synth(ts, window, freqs, tone2_freq, cfg.flt_threshold) * fmask
+
+                fundamental_mask = np.clip(tone1_mask + tone2_mask, 0.0, 1.0)
+                harmonics_mask = np.zeros_like(mag, dtype=float)
+                analysis_filter = fundamental_mask
+                fundamental_freq = tone1_freq
+                chosen_freq = tone1_freq
+                wc = tone1_mask + tone2_mask
 
             if cfg.avg_enabled:
                 if stable_count < 3:
@@ -511,16 +761,42 @@ def main() -> int:
             prms = (vrms ** 2) / cfg.load_ohm
 
             # Frequency-domain metrics
-            thd_db, thd_pct = thd_ieee(wmagnitude, harmonics_mask, carrier_idx)
-            sinad_db, sinad_pct = thdn(wmagnitude, fundamental_mask, analysis_filter, fmask)
-            snr_db = snr(wmagnitude, fundamental_mask, analysis_filter, fmask, harmonics_mask)
-            enob_bits = enob(sinad_db)
+            if not imd_mode:
+                thd_db, thd_pct = thd_ieee(wmagnitude, harmonics_mask, carrier_idx)
+                sinad_db, sinad_pct = thdn(wmagnitude, fundamental_mask, analysis_filter, fmask)
+                snr_db = snr(wmagnitude, fundamental_mask, analysis_filter, fmask, harmonics_mask)
+                enob_bits = enob(sinad_db)
+
+                imd_db = float("nan")
+                imd_pct = float("nan")
+                imd_diff_freq = float("nan")
+                imd_diff_db = float("nan")
+                imd_diff_pct = float("nan")
+            else:
+                imd_db, imd_pct = imd_total(wmagnitude, tone1_mask, tone2_mask, fmask)
+                sinad_db, sinad_pct = thdn(wmagnitude, fundamental_mask, analysis_filter, fmask)
+                snr_db = snr(wmagnitude, fundamental_mask, analysis_filter, fmask, np.zeros_like(wmagnitude))
+                enob_bits = enob(sinad_db)
+
+                thd_db = float("nan")
+                thd_pct = float("nan")
+
+                bin_width_hz = cfg.sample_rate / cfg.chunk
+                imd_diff_freq, imd_diff_db, imd_diff_pct = imd_ccif_difference(
+                    wmagnitude,
+                    freqs,
+                    tone1_freq,
+                    tone2_freq,
+                    half_width_hz=max(2.0 * bin_width_hz, 2.0),
+                )
 
             if stable_count == write_after and args.csv:
+                mode_name = "IMD" if imd_mode else "THD"
                 with open(args.csv, "a", encoding="utf-8") as f:
                     f.write(
-                        f"{fundamental_freq},{thd_db},{thd_pct},{sinad_db},{sinad_pct},"
-                        f"{snr_db},{enob_bits},{vrms},{prms}\n"
+                        f"{mode_name},{tone1_freq},{tone2_freq},{thd_db},{thd_pct},{imd_db},{imd_pct},"
+                        f"{imd_diff_freq},{imd_diff_db},{imd_diff_pct},"
+                        f"{sinad_db},{sinad_pct},{snr_db},{enob_bits},{vrms},{prms}\n"
                     )
 
             # Frequency-domain plot
@@ -535,7 +811,7 @@ def main() -> int:
             ax_freq.plot(freqs[i_lo:i_hi], clean_log(wc[i_lo:i_hi]), "g.")
             ax_freq.grid()
 
-            if carrier_idx > 0:
+            if not imd_mode and carrier_idx > 0:
                 for i in range(1, 1 + cfg.thd_harmonics):
                     idx = carrier_idx * i
                     if idx < len(wmagnitude):
@@ -552,9 +828,25 @@ def main() -> int:
                                     color="c",
                                     fontstyle="italic",
                                 )
+            else:
+                for tone_freq, label in [(tone1_freq, "F1"), (tone2_freq, "F2")]:
+                    idx = nearest_index(freqs, tone_freq)
+                    y = wmagnitude[idx]
+                    if y > 1e-10:
+                        y_db = 20.0 * math.log10(y)
+                        if y_db > db_range[0]:
+                            ax_freq.text(
+                                freqs[idx],
+                                y_db,
+                                label,
+                                horizontalalignment="center",
+                                verticalalignment="bottom",
+                                color="c",
+                                fontstyle="italic",
+                            )
 
             info_text = []
-            best = best_freq(prime_freqs, fundamental_freq)
+            best = best_freq(prime_freqs)
             for i, bf in enumerate(best):
                 mark = "*" if abs(chosen_freq - bf) < 1e-6 else " "
                 info_text.append(
@@ -568,31 +860,46 @@ def main() -> int:
                     )
                 )
                 mv = 2.5 * 10 ** ((riaa_db(bf) - riaa_1000) / 20)
-                print(f"{bf:10.5f}Hz {mv:.1f}mV")
+                # print(f"{bf:10.5f}Hz {mv:.1f}mV")
+            
+            mode_label = "IMD" if imd_mode else "THD"
 
             info_text.extend(
                 [
-                    plt.text(0.5, 0.3, f"Base : {fundamental_freq:10.5f}Hz",
+                    plt.text(0.5, 0.3, f"Mode : {mode_label}",
                              transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
                     plt.text(0.5, 0.1, f"#W/sr: {cfg.chunk:5d}#/{cfg.sample_rate * 1e-3:4.1f}kHz",
                              transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
-                    plt.text(2.5, 0.3, f"   Vpp: {vpp:5.1f}V",
+
+                    plt.text(2.5, 0.3, f"F1   : {tone1_freq:9.3f}Hz",
                              transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
-                    plt.text(2.5, 0.1, f" Ppeak: {ppeak:5.1f}W",
+                    plt.text(2.5, 0.1, f"F2   : {tone2_freq:9.3f}Hz" if imd_mode else f"Base : {fundamental_freq:9.3f}Hz",
                              transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
-                    plt.text(4.5, 0.3, f"  Eff: {vrms:5.1f}V",
+
+                    plt.text(4.5, 0.3, f"Vpp  : {vpp:5.1f}V",
                              transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
-                    plt.text(4.5, 0.1, f"E Pwr: {prms:5.1f}W",
+                    plt.text(4.5, 0.1, f"Prms : {prms:5.1f}W",
                              transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
-                    plt.text(6.5, 0.3, f"Range: {voltage_range[1]:3.1f}V",
+
+                    plt.text(6.5, 0.3, f"Vrms : {vrms:5.1f}V",
                              transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
-                    plt.text(6.5, 0.1, f" Load: {cfg.load_ohm:3.1f}ohm",
+                    plt.text(6.5, 0.1, f"Load : {cfg.load_ohm:3.1f}ohm",
                              transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
-                    plt.text(8.5, 0.3, f"THD({cfg.thd_harmonics:02d}): {thd_db:5.1f}dB ({thd_pct:6.3f}%)",
-                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
-                    plt.text(8.5, 0.1, f"  THD-N: {sinad_db:5.1f}dB ({sinad_pct:6.3f}%)",
-                             transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
-                    plt.text(11.5, 0.1, f"    SNR: {snr_db:5.1f}dB  ENOB {enob_bits:3.1f}",
+
+                    plt.text(
+                        8.5, 0.3,
+                        f"IMD  : {imd_db:5.1f}dB ({imd_pct:6.3f}%)" if imd_mode
+                        else f"THD({cfg.thd_harmonics:02d}): {thd_db:5.1f}dB ({thd_pct:6.3f}%)",
+                        transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"
+                    ),
+                    plt.text(
+                        8.5, 0.1,
+                        f"CCIF : {imd_diff_db:5.1f}dB ({imd_diff_pct:6.3f}%)" if imd_mode
+                        else f"THD-N: {sinad_db:5.1f}dB ({sinad_pct:6.3f}%)",
+                        transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"
+                    ),
+
+                    plt.text(11.5, 0.1, f"SNR  : {snr_db:5.1f}dB  ENOB {enob_bits:3.1f}",
                              transform=fig.dpi_scale_trans, fontfamily="monospace", weight="bold"),
                 ]
             )
