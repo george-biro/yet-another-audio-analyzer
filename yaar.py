@@ -25,7 +25,7 @@ import numpy as np
 import pyaudio
 from matplotlib.ticker import EngFormatter
 
-
+plt.ion()
 EPS = 1e-20
 
 
@@ -712,7 +712,7 @@ def main() -> int:
         pic_base, pic_ext = os.path.splitext(args.plot) if args.plot else ("", "")
 
         fig, (skip0, ax_time, skip1, ax_freq, skip2) = plt.subplots(
-            5, 1, figsize=(16, 9), gridspec_kw={"height_ratios": [0.1, 2, 0.01, 6, 0.5]}
+            5, 1, figsize=(10, 6), gridspec_kw={"height_ratios": [0.1, 2, 0.01, 6, 0.5]}
         )
 
         closed = {"value": False}
@@ -1003,7 +1003,9 @@ def main() -> int:
                 ]
             )
 
-            plt.pause(0.01)
+            fig.canvas.draw_idle()
+            fig.canvas.flush_events()
+            time.sleep(0.01)
 
             if stable_count == write_after and pic_base:
                 plt.savefig(f"{pic_base}_{fundamental_freq:.0f}Hz{pic_ext}")
