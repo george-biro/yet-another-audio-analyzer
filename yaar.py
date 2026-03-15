@@ -78,19 +78,6 @@ def list_sound_devices(audio: pyaudio.PyAudio) -> None:
         if dev.get("maxInputChannels", 0) > 0:
             print(f"Input Device id {i} - {dev.get('name')}")
 
-
-def riaa_db(freq_hz: float) -> float:
-    t1 = 75e-6
-    t2 = 318e-6
-    t3 = 3180e-6
-    w = 2.0 * math.pi * freq_hz
-    return (
-        10.0 * math.log10(1.0 + 1.0 / ((w * t2) ** 2))
-        - 10.0 * math.log10(1.0 + 1.0 / ((w * t1) ** 2))
-        - 10.0 * math.log10(1.0 + (w * t3) ** 2)
-    )
-
-
 def db_rel(k: float) -> float:
     return float("nan") if k <= 0 else 20.0 * math.log10(k)
 
@@ -338,20 +325,6 @@ def is_prime(n: int) -> bool:
     return all(n % i for i in range(3, int(math.sqrt(n)) + 1, 2))
 
 
-def prime_freq_list(freqs: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    out = []
-    for i in range(3, len(freqs)):
-        if mask[i] > 0.5 and is_prime(i):
-            out.append(freqs[i])
-    return np.array(out, dtype=float)
-
-def best_freq(prime_list: np.ndarray) -> np.ndarray:
-    if len(prime_list) == 0:
-        return np.array([], dtype=float)
-
-    targets = [60.0, 1000.0, 7000.0, 10000.0, 19000.0, 20000.0]
-    indices = [int(np.argmin(np.abs(prime_list - t))) for t in targets]
-    return prime_list[np.clip(indices, 0, len(prime_list) - 1)]
 
 def get_adc_format(bits: int) -> AdcFormat:
     if bits == 16:
@@ -688,7 +661,7 @@ def render_status(skip2, imd_mode,
                   sinad_db, sinad_pct,
                   snr_db, enob_bits,
                   vpp, vrms, prms,
-                  cfg, prime_freqs):
+                  cfg, best_freqs):
 
     skip2.cla()
     skip2.axis("off")
@@ -722,10 +695,9 @@ def render_status(skip2, imd_mode,
         f"{'LOAD':<6}{cfg.load_ohm:>7.1f} Ω"
     )
 
-    best = best_freq(prime_freqs)
 
     ref_line = f"{'REF':<6}"
-    for bf in best:
+    for bf in best_freqs:
         mark = "*" if abs(tone1_freq - bf) < 1e-6 else " "
         ref_line += f"{bf:>10.2f} Hz{mark}  "
 
@@ -733,6 +705,46 @@ def render_status(skip2, imd_mode,
     skip2.text(0.01,0.40,line2,fontfamily="monospace",fontsize=10)
     skip2.text(0.01,0.20,line3,fontfamily="monospace",fontsize=10)
     skip2.text(0.01,0.00,ref_line,fontfamily="monospace",fontsize=8,style="italic")
+
+def time_domain_analyse(meas, load_ohm):
+    vpp = float(np.max(meas) - np.min(meas))
+    ppeak = float(np.max(np.square(meas)) / load_ohm)
+    vrms = rms(meas)
+    prms = (vrms ** 2) / load_ohm
+    return vpp, ppeak, vrms, prms
+
+def prime_freq_list(freqs: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    out = []
+    for i in range(3, len(freqs)):
+        if mask[i] > 0.5 and is_prime(i):
+            out.append(freqs[i])
+    return np.array(out, dtype=float)
+
+def best_freq(prime_list: np.ndarray) -> np.ndarray:
+    if len(prime_list) == 0:
+        return np.array([], dtype=float)
+
+    targets = [60.0, 1000.0, 7000.0, 10000.0, 19000.0, 20000.0]
+    indices = [int(np.argmin(np.abs(prime_list - t))) for t in targets]
+    return prime_list[np.clip(indices, 0, len(prime_list) - 1)]
+
+def get_fft_params(chunk, sample_rate, freq_range):
+    freqs = np.abs(np.fft.rfftfreq(chunk) * sample_rate)
+    fmask = np.zeros(len(freqs), dtype=float)
+    i_lo = nearest_index(freqs, freq_range[0])
+    i_hi = nearest_index(freqs, freq_range[1])
+    fmask[i_lo:i_hi] = 1.0
+    prime_freqs = prime_freq_list(freqs, fmask)
+    best_freqs = best_freq(prime_freqs)
+    return freqs, fmask, i_lo, i_hi, best_freqs
+
+def get_ts(chunk, sample_rate, trange):
+    tmax = chunk / sample_rate
+    time_range = [
+        max((tmax - trange * 1e-3) * 0.5, 0.0),
+        min((tmax + trange * 1e-3) * 0.5, tmax),
+    ]
+    return np.linspace(0.0, tmax, chunk, endpoint=False), time_range
 
 def main() -> int:
     parser = build_parser()
@@ -818,21 +830,9 @@ def main() -> int:
         formatter_hz = EngFormatter(unit="Hz")
         formatter_db = EngFormatter(unit="dB")
 
-        freqs = np.abs(np.fft.rfftfreq(cfg.chunk) * cfg.sample_rate)
-        fmask = np.zeros(len(freqs), dtype=float)
-        i_lo = nearest_index(freqs, freq_range[0])
-        i_hi = nearest_index(freqs, freq_range[1])
-        fmask[i_lo:i_hi] = 1.0
-        prime_freqs = prime_freq_list(freqs, fmask)
+        freqs, fmask, i_lo, i_hi, best_freqs = get_fft_params(cfg.chunk, cfg.sample_rate, freq_range)
 
-        tmax = cfg.chunk / cfg.sample_rate
-        time_range = [
-            max((tmax - args.trange * 1e-3) * 0.5, 0.0),
-            min((tmax + args.trange * 1e-3) * 0.5, tmax),
-        ]
-        ts = np.linspace(0.0, tmax, cfg.chunk, endpoint=False)
-
-        riaa_1000 = riaa_db(1000.0)
+        ts, time_range = get_ts(cfg.chunk, cfg.sample_rate, args.trange)
 
         wmagsum = np.zeros(len(freqs), dtype=float)
         wmagdiv = 0
@@ -855,6 +855,9 @@ def main() -> int:
             # Time-domain plot
             plot_time(ax_time, ts, meas, time_range, voltage_range, formatter_s, formatter_v)
 
+            # Time-domain metrics
+            vpp, ppeak, vrms, prms = time_domain_analyse(meas, cfg.load_ohm)
+
             # FFT
             mag = compute_fft(meas, window, fmask)
 
@@ -869,7 +872,7 @@ def main() -> int:
                 min_sep_hz=cfg.peak_min_separation_hz,
             )
 
-            imd_mode = len(peak_indices) >= 2
+            imd_mode = (len(peak_indices) >= 2)
 
             carrier_idx = peak_indices[0] if peak_indices else int(np.argmax(mag))
             carrier_freq = freqs[carrier_idx]
@@ -930,11 +933,6 @@ def main() -> int:
             else:
                 wmagnitude = mag
 
-            # Time-domain metrics
-            vpp = float(np.max(meas) - np.min(meas))
-            ppeak = float(np.max(np.square(meas)) / cfg.load_ohm)
-            vrms = rms(meas)
-            prms = (vrms ** 2) / cfg.load_ohm
 
             # Frequency-domain metrics
             if not imd_mode:
@@ -1022,7 +1020,7 @@ def main() -> int:
                   sinad_db, sinad_pct,
                   snr_db, enob_bits,
                   vpp, vrms, prms,
-                  cfg, prime_freqs)
+                  cfg, best_freqs)
 
             fig.canvas.draw_idle()
             fig.canvas.flush_events()
