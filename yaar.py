@@ -160,11 +160,18 @@ def find_top_two_peaks(
         return []
 
     # level test
-    strongest = wm[peaks[0]]
+    strongest_db = db_rel(wm[peaks[0]])
 
-    peaks = [p for p in peaks if wm[p] >= strongest * min_rel_level]
+    filtered = []
 
-    return sorted(peaks, key=lambda i: freqs[i])
+    for p in peaks:
+
+        level_db = db_rel(wm[p])
+
+        if level_db >= strongest_db + db_rel(min_rel_level):
+            filtered.append(p)
+
+    return sorted(filtered, key=lambda i: freqs[i])
 
 def refine_peak_freq_centroid(
     wm: np.ndarray,
@@ -333,7 +340,7 @@ def wclean_cached(
     peak : float
 ) -> np.ndarray:
 
-    key = (round(center_freq, 6), len(ts), floor_level)
+    key = int(center_freq * 1000)
 
     cached = WCLEAN_CACHE.get(key)
     if cached is not None:
@@ -436,6 +443,8 @@ def nearest_fft_size(x: int) -> int:
 
 
 def noise_from_db(x: float) -> float:
+    if x >= 0:
+        return 1
     return 10 ** (x / 20.0)
 
 
@@ -782,13 +791,13 @@ def plot_freq(ax_freq, freqs, mag, wc, i_lo, i_hi,
     ax_freq.xaxis.set_major_formatter(formatter_hz)
     ax_freq.yaxis.set_major_formatter(formatter_db)
 
-    mag_db = clean_log(mag[i_lo:i_hi])
-    wc_db  = clean_log(wc[i_lo:i_hi])
+    mag_db_full = clean_log(mag)
+    wc_db_full  = clean_log(wc)
 
-    top = mag_db.max()   # normalize to measured signal
+    top = mag_db_full[i_lo:i_hi].max()
 
-    mag_db -= top
-    wc_db  -= top
+    mag_db = mag_db_full[i_lo:i_hi] - top
+    wc_db  = wc_db_full[i_lo:i_hi] - top
 
     ax_freq.plot(freqs[i_lo:i_hi], mag_db, "b-")
     ax_freq.plot(freqs[i_lo:i_hi], wc_db, "g.", markersize=3)
@@ -882,17 +891,25 @@ def get_ts(chunk, sample_rate, trange):
     ]
     return np.linspace(0.0, tmax, chunk, endpoint=False), time_range
 
-def build_harmonics_mask(size, carrier_idx, num_harmonics, fmask):
+def build_harmonics_mask(freqs, tone_freq, num_harmonics, fmask):
 
-    mask = np.zeros(size, dtype=float)
+    mask = np.zeros(len(freqs), dtype=float)
+
+    bin_width = freqs[1] - freqs[0]
+    width = max(2 * bin_width, 2.0)
 
     for h in range(2, num_harmonics + 1):
-        idx = carrier_idx * h
-        if idx >= size:
-            break
-        mask[idx] = 1.0
 
+        harmonic_freq = tone_freq * h
+
+        if harmonic_freq >= freqs[-1]:
+            break
+
+        mask += build_peak_mask(freqs, harmonic_freq, width)
+
+    mask = np.clip(mask, 0.0, 1.0)
     mask *= fmask
+
     return mask
 
 def build_single_tone_masks(
@@ -920,7 +937,10 @@ def build_single_tone_masks(
     tone1_mask = notch(wc, 1e-20) * fmask
 
     harmonics_mask = build_harmonics_mask(
-        len(mag), carrier_idx, cfg.thd_harmonics, fmask
+        freqs,
+        tone1_freq,
+        cfg.thd_harmonics,
+        fmask
     )
 
     bin_width = freqs[1] - freqs[0]
@@ -1108,10 +1128,13 @@ def compute_metrics(mag, freqs, tones, fmask, cfg) -> Metrics:
 
 def annotate_peaks(ax, freqs, mag, db_range, tones, cfg):
 
+    mag_db_full = clean_log(mag)
     if not tones.imd_mode and tones.carrier_idx > 0:
 
         for i in range(1, 1 + cfg.thd_harmonics):
+
             idx = tones.carrier_idx * i
+
             if idx >= len(mag):
                 break
 
@@ -1119,8 +1142,8 @@ def annotate_peaks(ax, freqs, mag, db_range, tones, cfg):
             if y <= 1e-10:
                 continue
 
-            #y_db = 20 * math.log10(y)
-            y_db = 20 * math.log10(max(y,1e-20)) - clean_log(mag).max()
+            y_db = mag_db_full[idx] - mag_db_full.max()
+
             if y_db <= db_range[0]:
                 continue
 
@@ -1150,7 +1173,8 @@ def annotate_peaks(ax, freqs, mag, db_range, tones, cfg):
             if y <= 1e-10:
                 continue
 
-            y_db = 20 * math.log10(y)
+            y_db = mag_db_full[idx] - mag_db_full.max()
+
             if y_db <= db_range[0]:
                 continue
 
