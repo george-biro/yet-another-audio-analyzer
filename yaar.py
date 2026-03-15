@@ -684,7 +684,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--csv", type=str, default="", help="Append metrics to CSV")
     parser.add_argument("--window", type=str, default="hanning", help="Window function")
     parser.add_argument("--simfreq", type=float, default=0.0, help="Simulate exact frequency in Hz")
-    parser.add_argument("--simnoise", type=float, default=-1.0, help="Simulate noise amplitude in dB")
+    parser.add_argument("--simnoise", type=float, default=-100.0, help="Simulate noise amplitude in dB")
     parser.add_argument("--flttsh", type=float, default=160.0, help="Notch filter level in dB")
     parser.add_argument("--fndtsh", type=float, default=3.0, help="Fundamental voltage threshold in dB")
     parser.add_argument("--cftsh", type=float, default=0.25, help="Center frequency threshold in Hz")
