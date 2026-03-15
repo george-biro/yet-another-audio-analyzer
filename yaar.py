@@ -292,11 +292,11 @@ def normalize_unit(values: np.ndarray) -> np.ndarray:
     return values.copy()
 
 
-def clean_log(values: np.ndarray, floor: float = 1e-10) -> np.ndarray:
+def clean_log(values: np.ndarray, floor: float = 1e-20) -> np.ndarray:
     clipped = np.maximum(values, floor)
     return 20.0 * np.log10(clipped)
 
-WCLEAN_CACHE: dict[tuple[float, int, float], np.ndarray] = {}
+WCLEAN_CACHE: dict[int, np.ndarray] = {}
 
 def wclean(ts: np.ndarray, window: np.ndarray, center_freq: float, floor_level: float) -> np.ndarray:
     clean = np.sin(2.0 * np.pi * center_freq * ts) * window
@@ -411,7 +411,7 @@ def enob(sinad_db: float) -> float:
 
 
 def nearest_index(arr: np.ndarray, value: float) -> int:
-    return int(np.argmin(np.abs(arr - abs(value))))
+    return np.argmin(np.abs(arr - value))
 
 
 def is_prime(n: int) -> bool:
