@@ -50,7 +50,6 @@ class AudioConfig:
     load_ohm: float
     duration_s: int
     window_name: str
-    avg_enabled: bool
     sim_freq: float
     sim_freq2: float
     sim_noise: float
@@ -80,6 +79,20 @@ class ToneState:
     harmonics_mask: np.ndarray
     analysis_filter: np.ndarray
     wc: np.ndarray
+
+@dataclass
+class Metrics:
+    thd_db: float
+    thd_pct: float
+    imd_db: float
+    imd_pct: float
+    imd_diff_freq: float
+    imd_diff_db: float
+    imd_diff_pct: float
+    sinad_db: float
+    sinad_pct: float
+    snr_db: float
+    enob_bits: float
 
 def list_sound_devices(audio: pyaudio.PyAudio) -> None:
     host = 0
@@ -600,7 +613,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--plot", type=str, default="", help="Write plot to file")
     parser.add_argument("--csv", type=str, default="", help="Append metrics to CSV")
     parser.add_argument("--window", type=str, default="hanning", help="Window function")
-    parser.add_argument("--avg", action="store_true", help="Enable averaging")
     parser.add_argument("--simfreq", type=float, default=0.0, help="Simulate exact frequency in Hz")
     parser.add_argument("--simnoise", type=float, default=-1.0, help="Simulate noise amplitude in dB")
     parser.add_argument("--flttsh", type=float, default=120.0, help="Notch filter level in dB")
@@ -665,39 +677,33 @@ def plot_freq(ax_freq, freqs, mag, wc, i_lo, i_hi,
     ax_freq.plot(freqs[i_lo:i_hi], clean_log(wc[i_lo:i_hi]), "g.")
     ax_freq.grid()
 
-def render_status(skip2, imd_mode,
-                  tone1_freq, tone2_freq,
-                  thd_db, thd_pct,
-                  imd_db, imd_pct,
-                  imd_diff_db, imd_diff_pct,
-                  sinad_db, sinad_pct,
-                  snr_db, enob_bits,
+def render_status(skip2, tones, metrics,
                   vpp, vrms, prms,
                   cfg, best_freqs):
 
     skip2.cla()
     skip2.axis("off")
 
-    if imd_mode:
+    if tones.imd_mode:
         line1 = (
-            f"{'F1':<6}{tone1_freq:>8.2f} Hz   "
-            f"{'F2':<6}{tone2_freq:>8.2f} Hz   "
-            f"{'IMD':<6}{imd_db:>7.2f} dB ({imd_pct:6.2f} %)   "
-            f"{'CCIF':<6}{imd_diff_db:>7.2f} dB ({imd_diff_pct:6.3f} %)"
+            f"{'F1':<6}{tones.tone1_freq:>8.2f} Hz   "
+            f"{'F2':<6}{tones.tone2_freq:>8.2f} Hz   "
+            f"{'IMD':<6}{metrics.imd_db:>7.2f} dB ({metrics.imd_pct:6.2f} %)   "
+            f"{'CCIF':<6}{metrics.imd_diff_db:>7.2f} dB ({metrics.imd_diff_pct:6.3f} %)"
         )
     else:
         line1 = (
-            f"{'BASE':<6}{tone1_freq:>8.2f} Hz   "
+            f"{'BASE':<6}{tones.tone1_freq:>8.2f} Hz   "
             f"{'':<16}    "
-            f"{'THD':<6}{thd_db:>7.2f} dB ({thd_pct:6.2f} %)   "
-            f"{'THD+N':<6}{sinad_db:>7.2f} dB ({sinad_pct:6.2f} %)"
+            f"{'THD':<6}{metrics.thd_db:>7.2f} dB ({metrics.thd_pct:6.2f} %)   "
+            f"{'THD+N':<6}{metrics.sinad_db:>7.2f} dB ({metrics.sinad_pct:6.2f} %)"
         )
 
     line2 = (
         f"{'FFT':<6}{cfg.chunk:>8d}      "
         f"{'SR':<6}{cfg.sample_rate/1000:>8.1f} kHz  "
-        f"{'SNR':<6}{snr_db:>7.2f} dB              "
-        f"{'ENOB':<6}{enob_bits:>7.2f} bits"
+        f"{'SNR':<6}{metrics.snr_db:>7.2f} dB              "
+        f"{'ENOB':<6}{metrics.enob_bits:>7.2f} bits"
     )
 
     line3 = (
@@ -710,7 +716,7 @@ def render_status(skip2, imd_mode,
 
     ref_line = f"{'REF':<6}"
     for bf in best_freqs:
-        mark = "*" if abs(tone1_freq - bf) < 1e-6 else " "
+        mark = "*" if abs(tones.tone1_freq - bf) < 1e-6 else " "
         ref_line += f"{bf:>10.2f} Hz{mark}  "
 
     skip2.text(0.01,0.60,line1,fontfamily="monospace",fontsize=10)
@@ -911,7 +917,7 @@ def compute_metrics(mag, tones, freqs, fmask, cfg):
             half_width_hz=max(2.0 * bin_width_hz, 2.0),
         )
 
-    return (
+    return Metrics(
         thd_db,
         thd_pct,
         imd_db,
@@ -924,6 +930,63 @@ def compute_metrics(mag, tones, freqs, fmask, cfg):
         snr_db,
         enob_bits,
     )
+
+def annotate_peaks(ax, freqs, mag, db_range, tones, cfg):
+
+    if not tones.imd_mode and tones.carrier_idx > 0:
+
+        for i in range(1, 1 + cfg.thd_harmonics):
+            idx = tones.carrier_idx * i
+            if idx >= len(mag):
+                break
+
+            y = mag[idx]
+            if y <= 1e-10:
+                continue
+
+            y_db = 20 * math.log10(y)
+            if y_db <= db_range[0]:
+                continue
+
+            ax.text(
+                freqs[idx],
+                y_db,
+                str(i),
+                horizontalalignment="center",
+                verticalalignment="bottom",
+                color="c",
+                fontstyle="italic",
+            )
+
+    else:
+
+        for tone_freq, label in [
+            (tones.tone1_freq, "F1"),
+            (tones.tone2_freq, "F2"),
+        ]:
+
+            if tone_freq <= 0:
+                continue
+
+            idx = nearest_index(freqs, tone_freq)
+
+            y = mag[idx]
+            if y <= 1e-10:
+                continue
+
+            y_db = 20 * math.log10(y)
+            if y_db <= db_range[0]:
+                continue
+
+            ax.text(
+                freqs[idx],
+                y_db,
+                label,
+                horizontalalignment="center",
+                verticalalignment="bottom",
+                color="c",
+                fontstyle="italic",
+            )
 
 def main() -> int:
     parser = build_parser()
@@ -944,7 +1007,6 @@ def main() -> int:
         load_ohm=args.rload,
         duration_s=args.duration,
         window_name=args.window,
-        avg_enabled=args.avg,
         sim_freq=args.simfreq,
         sim_freq2=args.simfreq2,
         sim_noise=noise_from_db(args.simnoise),
@@ -1015,7 +1077,7 @@ def main() -> int:
 
         prev_carrier_idx = -1
         stable_count = 0
-        write_after = 10 if cfg.avg_enabled else 3
+        write_after = 10 
 
         stream = open_stream(audio, cfg, adc)
         
@@ -1035,94 +1097,34 @@ def main() -> int:
             # Time-domain metrics
             vpp, ppeak, vrms, prms = time_domain_analyse(meas, cfg.load_ohm)
 
-            # FFT
             mag = compute_fft(meas, window, fmask)
-
-            if len(mag) != len(freqs):
-                raise RuntimeError("Spectrum length mismatch.")
 
             tones = analyze_tones(mag, freqs, ts, window, fmask, cfg)
 
-            tone1_freq = tones.tone1_freq
-            tone2_freq = tones.tone2_freq
-            carrier_idx = tones.carrier_idx
-            wc = tones.wc
-            imd_mode = tones.imd_mode
-            fundamental_mask = tones.fundamental_mask
-            harmonics_mask = tones.harmonics_mask
-            tone1_mask = tones.tone1_mask
-            tone2_mask = tones.tone2_mask
-            analysis_filter = tones.analysis_filter
-
-            (
-                thd_db,
-                thd_pct,
-                imd_db,
-                imd_pct,
-                imd_diff_freq,
-                imd_diff_db,
-                imd_diff_pct,
-                sinad_db,
-                sinad_pct,
-                snr_db,
-                enob_bits,
-            ) = compute_metrics(mag, tones, freqs, fmask, cfg)
+            metrics = compute_metrics(mag, tones, freqs, fmask, cfg)
 
             if stable_count == write_after and args.csv:
-                mode_name = "IMD" if imd_mode else "THD"
+
+                mode_name = "IMD" if tones.imd_mode else "THD"
+
                 with open(args.csv, "a", encoding="utf-8") as f:
                     f.write(
-                        f"{mode_name},{tone1_freq},{tone2_freq},{thd_db},{thd_pct},{imd_db},{imd_pct},"
-                        f"{imd_diff_freq},{imd_diff_db},{imd_diff_pct},"
-                        f"{sinad_db},{sinad_pct},{snr_db},{enob_bits},{vrms},{prms}\n"
+                        f"{mode_name},{tones.tone1_freq},{tones.tone2_freq},"
+                        f"{metrics.thd_db},{metrics.thd_pct},"
+                        f"{metrics.imd_db},{metrics.imd_pct},"
+                        f"{metrics.imd_diff_freq},{metrics.imd_diff_db},{metrics.imd_diff_pct},"
+                        f"{metrics.sinad_db},{metrics.sinad_pct},"
+                        f"{metrics.snr_db},{metrics.enob_bits},"
+                        f"{vrms},{prms}\n"
                     )
 
-            plot_freq(ax_freq, freqs, mag, wc, i_lo, i_hi,
-                    freq_range, db_range, formatter_hz, formatter_db)
+            plot_freq(ax_freq, freqs, mag, tones.wc, i_lo, i_hi,
+                      freq_range, db_range, formatter_hz, formatter_db)
 
-            if not imd_mode and carrier_idx > 0:
-                for i in range(1, 1 + cfg.thd_harmonics):
-                    idx = carrier_idx * i
-                    if idx < len(mag):
-                        y = mag[idx]
-                        if y > 1e-10:
-                            y_db = 20.0 * math.log10(y)
-                            if y_db > db_range[0]:
-                                ax_freq.text(
-                                    freqs[idx],
-                                    y_db,
-                                    str(i),
-                                    horizontalalignment="center",
-                                    verticalalignment="bottom",
-                                    color="c",
-                                    fontstyle="italic",
-                                )
-            else:
-                for tone_freq, label in [(tone1_freq, "F1"), (tone2_freq, "F2")]:
-                    idx = nearest_index(freqs, tone_freq)
-                    y = mag[idx]
-                    if y > 1e-10:
-                        y_db = 20.0 * math.log10(y)
-                        if y_db > db_range[0]:
-                            ax_freq.text(
-                                freqs[idx],
-                                y_db,
-                                label,
-                                horizontalalignment="center",
-                                verticalalignment="bottom",
-                                color="c",
-                                fontstyle="italic",
-                            )
-            
-            render_status(skip2, imd_mode,
-                  tone1_freq, tone2_freq,
-                  thd_db, thd_pct,
-                  imd_db, imd_pct,
-                  imd_diff_db, imd_diff_pct,
-                  sinad_db, sinad_pct,
-                  snr_db, enob_bits,
-                  vpp, vrms, prms,
-                  cfg, best_freqs)
+            annotate_peaks(ax_freq, freqs, mag, db_range, tones, cfg)
+                    
+            render_status(skip2, tones, metrics, vpp, vrms, prms,
+                          cfg, best_freqs)
 
             fig.canvas.draw_idle()
             fig.canvas.flush_events()
