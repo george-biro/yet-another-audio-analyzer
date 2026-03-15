@@ -1120,7 +1120,7 @@ def annotate_peaks(ax, freqs, mag, db_range, tones, cfg):
                 continue
 
             #y_db = 20 * math.log10(y)
-            y_db = clean_log(y) - clean_log(mag).max()
+            y_db = 20 * math.log10(max(y,1e-20)) - clean_log(mag).max()
             if y_db <= db_range[0]:
                 continue
 
