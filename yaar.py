@@ -117,26 +117,7 @@ def notch(values: np.ndarray, level: float) -> np.ndarray:
     mask[values > level] = 1.0
     return mask
 
-def carrier(
-    spectrum: np.ndarray, num_harmonics: int, freq_mask: np.ndarray, level: float
-) -> Tuple[int, np.ndarray, np.ndarray]:
-    carrier_idx = int(np.argmax(spectrum))
 
-    if carrier_idx < 1:
-        step = 1
-        harmonic_count = 1
-    else:
-        step = carrier_idx
-        harmonic_count = num_harmonics
-
-    fundamental_mask = notch(spectrum, spectrum[carrier_idx] * level)
-
-    harmonics_mask = np.zeros_like(spectrum, dtype=float)
-    harmonics_mask[carrier_idx::step][:harmonic_count] = 1.0
-    harmonics_mask[carrier_idx] = 0.0
-    harmonics_mask *= freq_mask
-
-    return carrier_idx, fundamental_mask, harmonics_mask
 
 def build_peak_mask(freqs: np.ndarray, center_freq: float, half_width_hz: float) -> np.ndarray:
     mask = np.zeros(len(freqs), dtype=float)
@@ -202,6 +183,34 @@ def find_top_two_peaks(
 
     return sorted(peaks, key=lambda i: freqs[i])
 
+def refine_peak_freq_centroid(
+    wm: np.ndarray,
+    freqs: np.ndarray,
+    idx: int,
+    rel_level: float = 0.25,
+    radius: int = 3,
+) -> float:
+    lo = max(idx - radius, 0)
+    hi = min(idx + radius + 1, len(wm))
+
+    local_mag = wm[lo:hi]
+    local_freq = freqs[lo:hi]
+
+    peak = wm[idx]
+    if peak <= 0:
+        return freqs[idx]
+
+    mask = local_mag >= peak * rel_level
+    if not np.any(mask):
+        return freqs[idx]
+
+    weights = local_mag[mask] ** 2
+    denom = np.sum(weights)
+    if denom <= 1e-20:
+        return freqs[idx]
+
+    return float(np.sum(local_freq[mask] * weights) / denom)
+
 def calc_peak_freq(wm, freqs, idx, _rel):
 
     if idx <= 0 or idx >= len(wm) - 1:
@@ -220,6 +229,20 @@ def calc_peak_freq(wm, freqs, idx, _rel):
     bin_width = freqs[1] - freqs[0]
 
     return freqs[idx] + delta * bin_width
+
+def calc_peak_freq_stable(
+    wm: np.ndarray,
+    freqs: np.ndarray,
+    idx: int,
+    center_freq_threshold: float,
+) -> float:
+    parabolic = calc_peak_freq(wm, freqs, idx, 0.0)
+    centroid = refine_peak_freq_centroid(wm, freqs, idx)
+
+    if abs(parabolic - centroid) <= center_freq_threshold:
+        return 0.5 * (parabolic + centroid)
+
+    return parabolic
 
 def imd_total(
     wm: np.ndarray,
@@ -295,7 +318,7 @@ def clean_log(values: np.ndarray, floor: float = 1e-10) -> np.ndarray:
 def wclean(ts: np.ndarray, window: np.ndarray, center_freq: float, floor_level: float) -> np.ndarray:
     clean = np.sin(2.0 * np.pi * center_freq * ts) * window
     spectrum = np.fft.rfft(clean)
-    mag = normalize_unit(np.abs(spectrum) / len(spectrum))
+    mag = normalize_unit(np.abs(spectrum) / len(ts))
     mag[mag < floor_level] = 0.0
     return mag
 
@@ -303,8 +326,9 @@ def rms(values: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.square(values))))
 
 def thd_ieee(wm, mh, carrier_idx):
-    vfund = np.sum(np.square(wm * build_peak_mask(
-        np.arange(len(wm)), carrier_idx, 1)))
+    lo = max(carrier_idx - 1, 0)
+    hi = min(carrier_idx + 2, len(wm))
+    vfund = np.sum(np.square(wm[lo:hi]))
     vharm = np.sum(np.square(wm * mh))
     if vfund < 1e-100:
         return float("nan"), float("nan")
@@ -648,7 +672,7 @@ def init_csv(path: str) -> None:
 def fft_magnitude(meas: np.ndarray, window: np.ndarray) -> np.ndarray:
     coherent_gain = np.sum(window) / len(window)
     spectrum = np.fft.rfft(meas)
-    mag = np.abs(spectrum) / (len(spectrum) * coherent_gain)
+    mag = np.abs(spectrum) / (len(meas) * coherent_gain)
     return normalize_unit(mag)
 
 def apply_freq_mask(values: np.ndarray, fmask: np.ndarray) -> np.ndarray:
@@ -777,7 +801,7 @@ def build_harmonics_mask(
     fmask: np.ndarray,
 ) -> np.ndarray:
     mask = np.zeros(size, dtype=float)
-    if carrier_idx > 0:
+    if carrier_idx > 1:
         mask[carrier_idx::carrier_idx][:num_harmonics] = 1.0
         mask[carrier_idx] = 0.0
         mask *= fmask
@@ -793,7 +817,9 @@ def build_single_tone_masks(
     cfg: AudioConfig,
 ) -> tuple[float, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     carrier_freq = freqs[carrier_idx]
-    peak_freq = calc_peak_freq(mag, freqs, carrier_idx, cfg.frq_threshold)
+    peak_freq = calc_peak_freq_stable(
+        mag, freqs, carrier_idx, cfg.center_freq_threshold
+    )
 
     tone1_freq = (
         carrier_freq
@@ -824,8 +850,12 @@ def build_two_tone_masks(
     fmask: np.ndarray,
     cfg: AudioConfig,
 ) -> tuple[float, float, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    tone1_freq = calc_peak_freq(mag, freqs, idx1, cfg.frq_threshold)
-    tone2_freq = calc_peak_freq(mag, freqs, idx2, cfg.frq_threshold)
+    tone1_freq = calc_peak_freq_stable(
+        mag, freqs, idx1, cfg.center_freq_threshold
+    )
+    tone2_freq = calc_peak_freq_stable(
+        mag, freqs, idx2, cfg.center_freq_threshold
+    )
 
     tone1_mask = peak_band_from_synth(
         ts, window, freqs, tone1_freq, cfg.flt_threshold
@@ -919,7 +949,10 @@ def compute_metrics(mag, tones, freqs, fmask, cfg) -> Metrics:
 
         signal = np.sum(np.square(mag * tones.signal_mask))
         noise = np.sum(np.square(mag * (fmask - tones.signal_mask)))
-        snr_db = db_rel(math.sqrt(signal / noise))
+        if noise <= 1e-100:
+            snr_db = float("nan")
+        else:
+            snr_db = db_rel(math.sqrt(signal / noise))
         enob_bits = enob(sinad_db)
 
         imd_db = float("nan")
