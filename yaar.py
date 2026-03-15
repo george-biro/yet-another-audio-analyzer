@@ -75,7 +75,6 @@ class ToneState:
     tone2_freq: float
     tone1_mask: np.ndarray
     tone2_mask: np.ndarray
-    signal_mask: np.ndarray
     harmonics_mask: np.ndarray
     analysis_filter: np.ndarray
     wc: np.ndarray
@@ -918,23 +917,24 @@ def build_single_tone_masks(
         else peak_freq
     )
 
-    signal_mask = notch(mag, mag[carrier_idx] * cfg.fnd_threshold)
+    wc = wclean_cached(ts, window, tone1_freq, cfg.flt_threshold, mag[carrier_idx])
+
+    tone1_mask = notch(wc, 1e-20) * fmask
+
     harmonics_mask = build_harmonics_mask(
         len(mag), carrier_idx, cfg.thd_harmonics, fmask
     )
 
-    wc = wclean_cached(ts, window, tone1_freq, cfg.flt_threshold, mag[carrier_idx])
-    
     bin_width = freqs[1] - freqs[0]
+
     analysis_filter = build_peak_mask(
         freqs,
         tone1_freq,
         2 * bin_width
-        )
-    tone1_mask = signal_mask
+    )
     tone2_mask = np.zeros_like(mag)
 
-    return tone1_freq, tone1_mask, tone2_mask, signal_mask, harmonics_mask, analysis_filter, wc
+    return tone1_freq, tone1_mask, tone2_mask, harmonics_mask, analysis_filter, wc
 
 def build_two_tone_masks(
     mag: np.ndarray,
@@ -971,8 +971,6 @@ def build_two_tone_masks(
     tone1_mask = notch(wc1, 1e-20) * fmask
     tone2_mask = notch(wc2, 1e-20) * fmask
 
-    signal_mask = np.clip(tone1_mask + tone2_mask, 0.0, 1.0)
-
     harmonics_mask = np.zeros_like(mag)
 
     analysis_filter = notch(wc, 1e-20) * fmask
@@ -982,7 +980,6 @@ def build_two_tone_masks(
         tone2_freq,
         tone1_mask,
         tone2_mask,
-        signal_mask,
         harmonics_mask,
         analysis_filter,
         wc,
@@ -1012,7 +1009,6 @@ def analyze_tones(
             tone1_freq,
             tone1_mask,
             tone2_mask,
-            signal_mask,
             harmonics_mask,
             analysis_filter,
             wc,
@@ -1028,7 +1024,6 @@ def analyze_tones(
             tone2_freq,
             tone1_mask,
             tone2_mask,
-            signal_mask,
             harmonics_mask,
             analysis_filter,
             wc,
@@ -1043,7 +1038,6 @@ def analyze_tones(
         tone2_freq=tone2_freq,
         tone1_mask=tone1_mask,
         tone2_mask=tone2_mask,
-        signal_mask=signal_mask,
         harmonics_mask=harmonics_mask,
         analysis_filter=analysis_filter,
         wc=wc,
