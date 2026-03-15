@@ -68,6 +68,18 @@ class AdcFormat:
     dtype: np.dtype
     scale: float
 
+@dataclass
+class ToneState:
+    imd_mode: bool
+    carrier_idx: int
+    tone1_freq: float
+    tone2_freq: float
+    tone1_mask: np.ndarray
+    tone2_mask: np.ndarray
+    fundamental_mask: np.ndarray
+    harmonics_mask: np.ndarray
+    analysis_filter: np.ndarray
+    wc: np.ndarray
 
 def list_sound_devices(audio: pyaudio.PyAudio) -> None:
     host = 0
@@ -637,7 +649,7 @@ def plot_time(ax_time, ts, meas, time_range, voltage_range, formatter_s, formatt
     ax_time.plot(ts, meas, "r")
     ax_time.grid()
 
-def plot_freq(ax_freq, freqs, wmagnitude, wc, i_lo, i_hi,
+def plot_freq(ax_freq, freqs, mag, wc, i_lo, i_hi,
               freq_range, db_range, formatter_hz, formatter_db):
 
     ax_freq.cla()
@@ -649,7 +661,7 @@ def plot_freq(ax_freq, freqs, wmagnitude, wc, i_lo, i_hi,
     ax_freq.xaxis.set_major_formatter(formatter_hz)
     ax_freq.yaxis.set_major_formatter(formatter_db)
 
-    ax_freq.plot(freqs[i_lo:i_hi], clean_log(wmagnitude[i_lo:i_hi]), "b-")
+    ax_freq.plot(freqs[i_lo:i_hi], clean_log(mag[i_lo:i_hi]), "b-")
     ax_freq.plot(freqs[i_lo:i_hi], clean_log(wc[i_lo:i_hi]), "g.")
     ax_freq.grid()
 
@@ -746,6 +758,173 @@ def get_ts(chunk, sample_rate, trange):
     ]
     return np.linspace(0.0, tmax, chunk, endpoint=False), time_range
 
+def analyze_tones(mag, freqs, ts, window, fmask, cfg) -> ToneState:
+
+    peak_indices = find_top_two_peaks(
+        mag,
+        freqs,
+        fmask,
+        min_rel_level=10 ** (-cfg.two_tone_rel_db / 20),
+        min_sep_hz=cfg.peak_min_separation_hz,
+    )
+
+    imd_mode = len(peak_indices) >= 2
+
+    carrier_idx = peak_indices[0] if peak_indices else int(np.argmax(mag))
+    carrier_freq = freqs[carrier_idx]
+
+    wc = np.zeros_like(mag)
+
+    if not imd_mode:
+
+        fundamental_mask = notch(mag, mag[carrier_idx] * cfg.fnd_threshold)
+
+        harmonics_mask = np.zeros_like(mag)
+
+        if carrier_idx > 0:
+            harmonics_mask[carrier_idx::carrier_idx][: cfg.thd_harmonics] = 1.0
+            harmonics_mask[carrier_idx] = 0.0
+            harmonics_mask *= fmask
+
+        fundamental_freq = calc_peak_freq(
+            mag, freqs, carrier_idx, cfg.frq_threshold
+        )
+
+        chosen_freq = (
+            carrier_freq
+            if abs(fundamental_freq - carrier_freq) < cfg.center_freq_threshold
+            else fundamental_freq
+        )
+
+        wc = wclean(ts, window, chosen_freq, cfg.flt_threshold)
+
+        analysis_filter = notch(wc, 1e-20) * fmask
+
+        tone1_freq = chosen_freq
+        tone2_freq = 0.0
+
+        tone1_mask = fundamental_mask
+        tone2_mask = np.zeros_like(mag)
+
+    else:
+
+        idx1, idx2 = peak_indices[:2]
+
+        tone1_freq = calc_peak_freq(mag, freqs, idx1, cfg.frq_threshold)
+        tone2_freq = calc_peak_freq(mag, freqs, idx2, cfg.frq_threshold)
+
+        tone1_mask = peak_band_from_synth(
+            ts, window, freqs, tone1_freq, cfg.flt_threshold
+        ) * fmask
+
+        tone2_mask = peak_band_from_synth(
+            ts, window, freqs, tone2_freq, cfg.flt_threshold
+        ) * fmask
+
+        fundamental_mask = np.clip(tone1_mask + tone2_mask, 0.0, 1.0)
+
+        harmonics_mask = np.zeros_like(mag)
+
+        analysis_filter = fundamental_mask
+
+        wc = tone1_mask + tone2_mask
+
+    return ToneState(
+        imd_mode=imd_mode,
+        carrier_idx=carrier_idx,
+        tone1_freq=tone1_freq,
+        tone2_freq=tone2_freq,
+        tone1_mask=tone1_mask,
+        tone2_mask=tone2_mask,
+        fundamental_mask=fundamental_mask,
+        harmonics_mask=harmonics_mask,
+        analysis_filter=analysis_filter,
+        wc=wc,
+    )
+
+def compute_metrics(mag, tones, freqs, fmask, cfg):
+
+    if not tones.imd_mode:
+
+        thd_db, thd_pct = thd_ieee(
+            mag,
+            tones.harmonics_mask,
+            tones.carrier_idx,
+        )
+
+        sinad_db, sinad_pct = thdn(
+            mag,
+            tones.fundamental_mask,
+            tones.analysis_filter,
+            fmask,
+        )
+
+        signal = np.sum(np.square(mag * tones.fundamental_mask))
+        noise = np.sum(np.square(mag * (fmask - tones.fundamental_mask)))
+
+        snr_db = db_rel(math.sqrt(signal / noise))
+
+        enob_bits = enob(sinad_db)
+
+        imd_db = float("nan")
+        imd_pct = float("nan")
+        imd_diff_freq = float("nan")
+        imd_diff_db = float("nan")
+        imd_diff_pct = float("nan")
+
+    else:
+
+        imd_db, imd_pct = imd_total(
+            mag,
+            tones.tone1_mask,
+            tones.tone2_mask,
+            fmask,
+        )
+
+        sinad_db, sinad_pct = thdn(
+            mag,
+            tones.fundamental_mask,
+            tones.analysis_filter,
+            fmask,
+        )
+
+        snr_db = snr(
+            mag,
+            tones.fundamental_mask,
+            tones.analysis_filter,
+            fmask,
+            np.zeros_like(mag),
+        )
+
+        enob_bits = enob(sinad_db)
+
+        thd_db = float("nan")
+        thd_pct = float("nan")
+
+        bin_width_hz = cfg.sample_rate / cfg.chunk
+
+        imd_diff_freq, imd_diff_db, imd_diff_pct = imd_ccif_difference(
+            mag,
+            freqs,
+            tones.tone1_freq,
+            tones.tone2_freq,
+            half_width_hz=max(2.0 * bin_width_hz, 2.0),
+        )
+
+    return (
+        thd_db,
+        thd_pct,
+        imd_db,
+        imd_pct,
+        imd_diff_freq,
+        imd_diff_db,
+        imd_diff_pct,
+        sinad_db,
+        sinad_pct,
+        snr_db,
+        enob_bits,
+    )
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -834,8 +1013,6 @@ def main() -> int:
 
         ts, time_range = get_ts(cfg.chunk, cfg.sample_rate, args.trange)
 
-        wmagsum = np.zeros(len(freqs), dtype=float)
-        wmagdiv = 0
         prev_carrier_idx = -1
         stable_count = 0
         write_after = 10 if cfg.avg_enabled else 3
@@ -864,107 +1041,32 @@ def main() -> int:
             if len(mag) != len(freqs):
                 raise RuntimeError("Spectrum length mismatch.")
 
-            peak_indices = find_top_two_peaks(
-                mag,
-                freqs,
-                fmask,
-                min_rel_level = 10 ** (-cfg.two_tone_rel_db / 20),
-                min_sep_hz=cfg.peak_min_separation_hz,
-            )
+            tones = analyze_tones(mag, freqs, ts, window, fmask, cfg)
 
-            imd_mode = (len(peak_indices) >= 2)
+            tone1_freq = tones.tone1_freq
+            tone2_freq = tones.tone2_freq
+            carrier_idx = tones.carrier_idx
+            wc = tones.wc
+            imd_mode = tones.imd_mode
+            fundamental_mask = tones.fundamental_mask
+            harmonics_mask = tones.harmonics_mask
+            tone1_mask = tones.tone1_mask
+            tone2_mask = tones.tone2_mask
+            analysis_filter = tones.analysis_filter
 
-            carrier_idx = peak_indices[0] if peak_indices else int(np.argmax(mag))
-            carrier_freq = freqs[carrier_idx]
-
-            if prev_carrier_idx == carrier_idx:
-                stable_count += 1
-            else:
-                stable_count = 0
-            prev_carrier_idx = carrier_idx
-
-            wc = np.zeros_like(mag)
-            if not imd_mode:
-                fundamental_mask = notch(mag, mag[carrier_idx] * cfg.fnd_threshold)
-                harmonics_mask = np.zeros_like(mag, dtype=float)
-
-                if carrier_idx > 0:
-                    harmonics_mask[carrier_idx::carrier_idx][: cfg.thd_harmonics] = 1.0
-                    harmonics_mask[carrier_idx] = 0.0
-                    harmonics_mask *= fmask
-
-                fundamental_freq = calc_peak_freq(mag, freqs, carrier_idx, cfg.frq_threshold)
-                chosen_freq = (
-                    carrier_freq
-                    if abs(fundamental_freq - carrier_freq) < cfg.center_freq_threshold
-                    else fundamental_freq
-                )
-
-                wc = wclean(ts, window, chosen_freq, cfg.flt_threshold)
-                analysis_filter = notch(wc, 1e-20) * fmask
-
-                tone1_freq = chosen_freq
-                tone2_freq = 0.0
-                tone1_mask = fundamental_mask
-                tone2_mask = np.zeros_like(mag, dtype=float)
-
-            else:
-                idx1, idx2 = peak_indices[:2]
-                tone1_freq = calc_peak_freq(mag, freqs, idx1, cfg.frq_threshold)
-                tone2_freq = calc_peak_freq(mag, freqs, idx2, cfg.frq_threshold)
-
-                tone1_mask = peak_band_from_synth(ts, window, freqs, tone1_freq, cfg.flt_threshold) * fmask
-                tone2_mask = peak_band_from_synth(ts, window, freqs, tone2_freq, cfg.flt_threshold) * fmask
-
-                fundamental_mask = np.clip(tone1_mask + tone2_mask, 0.0, 1.0)
-                harmonics_mask = np.zeros_like(mag, dtype=float)
-                analysis_filter = fundamental_mask
-                #fundamental_freq = tone1_freq
-                #chosen_freq = tone1_freq
-                wc = tone1_mask + tone2_mask
-
-            if cfg.avg_enabled:
-                if stable_count < 3:
-                    wmagsum[:] = 0.0
-                    wmagdiv = 0
-                wmagsum += mag
-                wmagdiv += 1
-                wmagnitude = wmagsum / max(wmagdiv, 1)
-            else:
-                wmagnitude = mag
-
-
-            # Frequency-domain metrics
-            if not imd_mode:
-                thd_db, thd_pct = thd_ieee(wmagnitude, harmonics_mask, carrier_idx)
-                sinad_db, sinad_pct = thdn(wmagnitude, fundamental_mask, analysis_filter, fmask)
-                signal = np.sum(np.square(wmagnitude * fundamental_mask))
-                noise = np.sum(np.square(wmagnitude * (fmask - fundamental_mask)))
-                snr_db = db_rel(math.sqrt(signal/noise))
-                enob_bits = enob(sinad_db)
-
-                imd_db = float("nan")
-                imd_pct = float("nan")
-                imd_diff_freq = float("nan")
-                imd_diff_db = float("nan")
-                imd_diff_pct = float("nan")
-            else:
-                imd_db, imd_pct = imd_total(wmagnitude, tone1_mask, tone2_mask, fmask)
-                sinad_db, sinad_pct = thdn(wmagnitude, fundamental_mask, analysis_filter, fmask)
-                snr_db = snr(wmagnitude, fundamental_mask, analysis_filter, fmask, np.zeros_like(wmagnitude))
-                enob_bits = enob(sinad_db)
-
-                thd_db = float("nan")
-                thd_pct = float("nan")
-
-                bin_width_hz = cfg.sample_rate / cfg.chunk
-                imd_diff_freq, imd_diff_db, imd_diff_pct = imd_ccif_difference(
-                    wmagnitude,
-                    freqs,
-                    tone1_freq,
-                    tone2_freq,
-                    half_width_hz=max(2.0 * bin_width_hz, 2.0),
-                )
+            (
+                thd_db,
+                thd_pct,
+                imd_db,
+                imd_pct,
+                imd_diff_freq,
+                imd_diff_db,
+                imd_diff_pct,
+                sinad_db,
+                sinad_pct,
+                snr_db,
+                enob_bits,
+            ) = compute_metrics(mag, tones, freqs, fmask, cfg)
 
             if stable_count == write_after and args.csv:
                 mode_name = "IMD" if imd_mode else "THD"
@@ -975,14 +1077,14 @@ def main() -> int:
                         f"{sinad_db},{sinad_pct},{snr_db},{enob_bits},{vrms},{prms}\n"
                     )
 
-            plot_freq(ax_freq, freqs, wmagnitude, wc, i_lo, i_hi,
+            plot_freq(ax_freq, freqs, mag, wc, i_lo, i_hi,
                     freq_range, db_range, formatter_hz, formatter_db)
 
             if not imd_mode and carrier_idx > 0:
                 for i in range(1, 1 + cfg.thd_harmonics):
                     idx = carrier_idx * i
-                    if idx < len(wmagnitude):
-                        y = wmagnitude[idx]
+                    if idx < len(mag):
+                        y = mag[idx]
                         if y > 1e-10:
                             y_db = 20.0 * math.log10(y)
                             if y_db > db_range[0]:
@@ -998,7 +1100,7 @@ def main() -> int:
             else:
                 for tone_freq, label in [(tone1_freq, "F1"), (tone2_freq, "F2")]:
                     idx = nearest_index(freqs, tone_freq)
-                    y = wmagnitude[idx]
+                    y = mag[idx]
                     if y > 1e-10:
                         y_db = 20.0 * math.log10(y)
                         if y_db > db_range[0]:
