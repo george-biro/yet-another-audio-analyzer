@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import ctypes
-from ctypes import c_uint32, c_void_p, byref
 import argparse
 import math
 import os
@@ -56,7 +55,6 @@ class AudioConfig:
     thd_harmonics: int
     flt_threshold: float
     fnd_threshold: float
-    frq_threshold: float
     center_freq_threshold: float
     two_tone_rel_db: float
     peak_min_separation_hz: float
@@ -105,9 +103,6 @@ def list_sound_devices(audio: pyaudio.PyAudio) -> None:
 
 def db_rel(k: float) -> float:
     return float("nan") if k <= 0 else 20.0 * math.log10(k)
-
-def db_pow(k: float) -> float:
-    return float("nan") if k <= 0 else 10.0 * math.log10(k)
 
 def from_db(db: float) -> float:
     return 10.0 ** (db / 20.0)
@@ -248,8 +243,10 @@ def imd_total(
     msig = np.clip(mfund1 + mfund2, 0.0, 1.0)
     mnoise = np.clip(fmask - msig, 0.0, 1.0)
 
-    vsig = np.sum(np.square(wm * msig))
-    vdist = np.sum(np.square(wm * mnoise))
+    tmp1 = wm * msig
+    vsig = np.dot(tmp1, tmp1)
+    tmp2 = wm * mnoise
+    vdist = np.dot(tmp2, tmp2)
 
     if vsig < 1e-100:
         return float("nan"), float("nan")
@@ -273,25 +270,19 @@ def imd_ccif_difference(
         return float("nan"), float("nan"), float("nan")
 
     diff_mask = build_peak_mask(freqs, fd, half_width_hz)
-    vdiff = np.sum(np.square(wm * diff_mask))
+    tmp1 = wm * diff_mask
+    vdiff = np.dot(tmp1, tmp1)
 
     m1 = build_peak_mask(freqs, f1, half_width_hz)
     m2 = build_peak_mask(freqs, f2, half_width_hz)
-    vref = np.sum(np.square(wm * (m1 + m2)))
+    tmp2 = wm * (m1 + m2)
+    vref = np.dot(tmp2, tmp2)
 
     if vref < 1e-100:
         return fd, float("nan"), float("nan")
 
     k = math.sqrt(vdiff / vref)
     return fd, db_rel(k), 100.0 * k
-
-def calc_f_freq(spectrum: np.ndarray, freqs: np.ndarray, level: float) -> float:
-    weighted = notch(spectrum, level) * spectrum
-    denom = np.sum(weighted)
-    if denom <= EPS:
-        return 0.0
-    return float(np.sum(weighted * freqs) / denom)
-
 
 def normalize_unit(values: np.ndarray) -> np.ndarray:
     vmax = np.max(values)
@@ -363,18 +354,22 @@ def rms(values: np.ndarray) -> float:
 def thd_ieee(wm, mh, carrier_idx):
     lo = max(carrier_idx - 1, 0)
     hi = min(carrier_idx + 2, len(wm))
-    vfund = np.sum(np.square(wm[lo:hi]))
-    vharm = np.sum(np.square(wm * mh))
+    tmp1 = wm[lo:hi]
+    vfund = np.dot(tmp1, tmp1)
+    tmp2 = wm * mh
+    vharm = np.dot(tmp2, tmp2)
     if vfund < 1e-100:
         return float("nan"), float("nan")
 
     k = math.sqrt(vharm / vfund)
     return db_rel(k), 100*k
 
-def thdn(wm: np.ndarray, mfund: np.ndarray, mfilter: np.ndarray, fmask: np.ndarray) -> Tuple[float, float]:
-    vfund = np.sum(np.square(wm * mfund))
+def thdn(wm: np.ndarray, mfilter: np.ndarray, fmask: np.ndarray) -> Tuple[float, float]:
+    tmp1 = wm * mfilter
+    vfund = np.dot(tmp1, tmp1)
     noise_mask = fmask - mfilter
-    vnoise = np.sum(np.square(wm * noise_mask))
+    tmp2 = wm * noise_mask
+    vnoise = np.dot(tmp2, tmp2)
     if vfund < 1e-100:
         return float("nan"), float("nan")
     k = math.sqrt(vnoise / vfund)
@@ -390,9 +385,10 @@ def snr(
 
     signal_mask = np.clip(analysis_filter, 0.0, 1.0)
     noise_mask = np.clip(fmask - analysis_filter - harmonics_mask, 0.0, 1.0)
-
-    vsignal = np.sum(np.square(wm * signal_mask))
-    vnoise = np.sum(np.square(wm * noise_mask))
+    tmp1 = wm * signal_mask
+    vsignal = np.dot(tmp1, tmp1)
+    tmp2 = wm * noise_mask
+    vnoise = np.dot(tmp2, tmp2)
 
     if vnoise < 1e-100:
         return float("nan")
@@ -684,7 +680,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--simnoise", type=float, default=-1.0, help="Simulate noise amplitude in dB")
     parser.add_argument("--flttsh", type=float, default=160.0, help="Notch filter level in dB")
     parser.add_argument("--fndtsh", type=float, default=3.0, help="Fundamental voltage threshold in dB")
-    parser.add_argument("--frqtsh", type=float, default=40.0, help="Fundamental frequency threshold in dB")
     parser.add_argument("--cftsh", type=float, default=0.25, help="Center frequency threshold in Hz")
     parser.add_argument(
         "--twotone-rel-db",
@@ -1001,7 +996,7 @@ def analyze_tones(
         wc=wc,
     )
 
-def compute_metrics(mag, tones, freqs, fmask, cfg) -> Metrics:
+def compute_metrics(mag, freqs, tones, fmask, cfg) -> Metrics:
 
     snr_db = snr(
         mag,
@@ -1020,7 +1015,6 @@ def compute_metrics(mag, tones, freqs, fmask, cfg) -> Metrics:
 
         sinad_db, sinad_pct = thdn(
             mag,
-            tones.analysis_filter,
             tones.analysis_filter,
             fmask,
         )
@@ -1149,7 +1143,6 @@ def main() -> int:
         thd_harmonics=args.thd,
         flt_threshold=from_db(-args.flttsh),
         fnd_threshold=from_db(-args.fndtsh),
-        frq_threshold=from_db(-args.frqtsh),
         center_freq_threshold=args.cftsh,
         two_tone_rel_db=args.twotone_rel_db,
         peak_min_separation_hz=args.peak_sep_hz,
@@ -1243,7 +1236,7 @@ def main() -> int:
                 stable_count = 0
             prev_carrier_idx = tones.carrier_idx
 
-            metrics = compute_metrics(mag, tones, freqs, fmask, cfg)
+            metrics = compute_metrics(mag, freqs, tones, fmask, cfg)
 
 
             plot_freq(ax_freq, freqs, mag, tones.wc, i_lo, i_hi,
