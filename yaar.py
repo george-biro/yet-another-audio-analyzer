@@ -334,33 +334,45 @@ def wclean_cached(
     window: np.ndarray,
     center_freq: float,
     floor_level: float,
+    peak : float
 ) -> np.ndarray:
 
     key = (round(center_freq, 6), len(ts), floor_level)
 
     cached = WCLEAN_CACHE.get(key)
     if cached is not None:
-        return cached
+        wc = cached.copy()
+    else:
+        wc = wclean(ts, window, center_freq, floor_level)
+        WCLEAN_CACHE[key] = wc.copy()
 
-    wc = wclean(ts, window, center_freq, floor_level)
-    WCLEAN_CACHE[key] = wc
+    wc_peak = np.max(wc)
+    if wc_peak > 1e-20:
+        wc *= peak / wc_peak
     return wc
 
 def rms(values: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.square(values))))
 
-def thd_ieee(wm, mh, carrier_idx):
-    lo = max(carrier_idx - 1, 0)
-    hi = min(carrier_idx + 2, len(wm))
-    tmp1 = wm[lo:hi]
-    vfund = np.dot(tmp1, tmp1)
-    tmp2 = wm * mh
-    vharm = np.dot(tmp2, tmp2)
-    if vfund < 1e-100:
+def thd_ieee(wm: np.ndarray, mh: np.ndarray, wc: np.ndarray):
+    """
+    THD using clean window model for the fundamental.
+    More accurate with window leakage.
+    """
+
+    # fundamental energy from clean model
+    fund = wm * (wc > 0)
+    vfund = np.dot(fund, fund)
+
+    if vfund <= EPS:
         return float("nan"), float("nan")
 
+    # harmonic energy
+    vharm = np.dot(wm * mh, wm * mh)
+
     k = math.sqrt(vharm / vfund)
-    return db_rel(k), 100*k
+
+    return db_rel(k), 100.0 * k
 
 def thdn(wm: np.ndarray, mfilter: np.ndarray, fmask: np.ndarray) -> Tuple[float, float]:
     tmp1 = wm * mfilter
@@ -741,8 +753,17 @@ def plot_freq(ax_freq, freqs, mag, wc, i_lo, i_hi,
     ax_freq.xaxis.set_major_formatter(formatter_hz)
     ax_freq.yaxis.set_major_formatter(formatter_db)
 
-    ax_freq.plot(freqs[i_lo:i_hi], clean_log(mag[i_lo:i_hi]), "b-")
-    ax_freq.plot(freqs[i_lo:i_hi], clean_log(wc[i_lo:i_hi]), "g.")
+    mag_db = clean_log(mag[i_lo:i_hi])
+    wc_db  = clean_log(wc[i_lo:i_hi])
+
+    top = mag_db.max()   # normalize to measured signal
+
+    mag_db -= top
+    wc_db  -= top
+
+    ax_freq.plot(freqs[i_lo:i_hi], mag_db, "b-")
+    ax_freq.plot(freqs[i_lo:i_hi], wc_db, "g.", markersize=3)
+
     ax_freq.grid()
 
 def render_status(skip2, tones, metrics,
@@ -815,7 +836,7 @@ def best_freq(prime_list: np.ndarray) -> np.ndarray:
     return prime_list[np.clip(indices, 0, len(prime_list) - 1)]
 
 def get_fft_params(chunk, sample_rate, freq_range):
-    freqs = np.abs(np.fft.rfftfreq(chunk) * sample_rate)
+    freqs = np.fft.rfftfreq(chunk, d=1/sample_rate)
     fmask = np.zeros(len(freqs), dtype=float)
     i_lo = nearest_index(freqs, freq_range[0])
     i_hi = nearest_index(freqs, freq_range[1])
@@ -870,9 +891,9 @@ def build_single_tone_masks(
         len(mag), carrier_idx, cfg.thd_harmonics, fmask
     )
 
-    wc = wclean_cached(ts, window, tone1_freq, cfg.flt_threshold)
+    wc = wclean_cached(ts, window, tone1_freq, cfg.flt_threshold, mag[carrier_idx])
+    
     analysis_filter = notch(wc, 1e-20) * fmask
-
     tone1_mask = signal_mask
     tone2_mask = np.zeros_like(mag)
 
@@ -905,15 +926,10 @@ def build_two_tone_masks(
     if amp1 < 1e-20 and amp2 < 1e-20:
         amp1 = amp2 = 1.0
 
-    # normalize ratio
-    scale = max(amp1, amp2)
-    a1 = amp1 / scale
-    a2 = amp2 / scale
+    wc1 = wclean_cached(ts, window, tone1_freq, cfg.flt_threshold, amp1)
+    wc2 = wclean_cached(ts, window, tone2_freq, cfg.flt_threshold, amp2)
 
-    wc1 = wclean_cached(ts, window, tone1_freq, cfg.flt_threshold)
-    wc2 = wclean_cached(ts, window, tone2_freq, cfg.flt_threshold)
-
-    wc = a1 * wc1 + a2 * wc2
+    wc = wc1 + wc2
 
     tone1_mask = notch(wc1, 1e-20) * fmask
     tone2_mask = notch(wc2, 1e-20) * fmask
