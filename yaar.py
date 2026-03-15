@@ -356,18 +356,15 @@ def rms(values: np.ndarray) -> float:
 
 def thd_ieee(wm: np.ndarray, mh: np.ndarray, wc: np.ndarray):
     """
-    THD using clean window model for the fundamental.
-    More accurate with window leakage.
+    THD using window-clean matched filter for fundamental.
     """
 
-    # fundamental energy from clean model
-    fund = wm * (wc > 0)
-    vfund = np.dot(fund, fund)
+    fund = wm * wc
+    vfund = np.dot(fund, fund) / max(np.dot(wc, wc), EPS)
 
     if vfund <= EPS:
         return float("nan"), float("nan")
 
-    # harmonic energy
     vharm = np.dot(wm * mh, wm * mh)
 
     k = math.sqrt(vharm / vfund)
@@ -853,17 +850,17 @@ def get_ts(chunk, sample_rate, trange):
     ]
     return np.linspace(0.0, tmax, chunk, endpoint=False), time_range
 
-def build_harmonics_mask(
-    size: int,
-    carrier_idx: int,
-    num_harmonics: int,
-    fmask: np.ndarray,
-) -> np.ndarray:
+def build_harmonics_mask(size, carrier_idx, num_harmonics, fmask):
+
     mask = np.zeros(size, dtype=float)
-    if carrier_idx > 1:
-        mask[carrier_idx::carrier_idx][:num_harmonics] = 1.0
-        mask[carrier_idx] = 0.0
-        mask *= fmask
+
+    for h in range(2, num_harmonics + 1):
+        idx = carrier_idx * h
+        if idx >= size:
+            break
+        mask[idx] = 1.0
+
+    mask *= fmask
     return mask
 
 def build_single_tone_masks(
@@ -1026,7 +1023,7 @@ def compute_metrics(mag, freqs, tones, fmask, cfg) -> Metrics:
         thd_db, thd_pct = thd_ieee(
             mag,
             tones.harmonics_mask,
-            tones.carrier_idx,
+            tones.wc,
         )
 
         sinad_db, sinad_pct = thdn(
