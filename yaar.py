@@ -369,15 +369,19 @@ def thd_ieee(wm: np.ndarray, mh: np.ndarray, wc: np.ndarray):
 
     return db_rel(k), 100.0 * k
 
-def thdn(wm: np.ndarray, mfilter: np.ndarray, fmask: np.ndarray) -> Tuple[float, float]:
-    vfund = np.sum(np.square(wm * mfilter))
-    noise_mask = np.clip(fmask - mfilter, 0.0, 1.0)
+def thdn(wm: np.ndarray, wc: np.ndarray, fmask: np.ndarray):
+
+    fund = wm * wc
+    vfund = np.dot(fund, fund) / max(np.dot(wc, wc), EPS)
+
+    noise_mask = np.clip(fmask - notch(wc, 1e-20), 0.0, 1.0)
     vnoise = np.sum(np.square(wm * noise_mask))
-    if vfund < 1e-100:
+
+    if vfund < EPS:
         return float("nan"), float("nan")
+
     k = math.sqrt(vnoise / vfund)
     return db_rel(k), 100.0 * k
-
 
 def snr(
     wm: np.ndarray,
@@ -1064,7 +1068,7 @@ def compute_metrics(mag, freqs, tones, fmask, cfg) -> Metrics:
 
         sinad_db, sinad_pct = thdn(
             mag,
-            tones.analysis_filter,
+            tones.wc,
             fmask,
         )
 
