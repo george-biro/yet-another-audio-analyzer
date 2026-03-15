@@ -241,10 +241,8 @@ def imd_total(
     msig = np.clip(mfund1 + mfund2, 0.0, 1.0)
     mnoise = np.clip(fmask - msig, 0.0, 1.0)
 
-    tmp1 = wm * msig
-    vsig = np.dot(tmp1, tmp1)
-    tmp2 = wm * mnoise
-    vdist = np.dot(tmp2, tmp2)
+    vsig = np.sum(np.square(wm * msig))
+    vdist = np.sum(np.square(wm * mnoise))
 
     if vsig < 1e-100:
         return float("nan"), float("nan")
@@ -268,13 +266,11 @@ def imd_ccif_difference(
         return float("nan"), float("nan"), float("nan")
 
     diff_mask = build_peak_mask(freqs, fd, half_width_hz)
-    tmp1 = wm * diff_mask
-    vdiff = np.dot(tmp1, tmp1)
+    vdiff = np.sum(np.square(wm * diff_mask))
 
     m1 = build_peak_mask(freqs, f1, half_width_hz)
     m2 = build_peak_mask(freqs, f2, half_width_hz)
-    tmp2 = wm * (m1 + m2)
-    vref = np.dot(tmp2, tmp2)
+    vref = np.sum(np.square(wm * (m1 + m2)))
 
     if vref < 1e-100:
         return fd, float("nan"), float("nan")
@@ -365,18 +361,16 @@ def thd_ieee(wm: np.ndarray, mh: np.ndarray, wc: np.ndarray):
     if vfund <= EPS:
         return float("nan"), float("nan")
 
-    vharm = np.dot(wm * mh, wm * mh)
+    vharm = np.sum(np.square(wm * mh))
 
     k = math.sqrt(vharm / vfund)
 
     return db_rel(k), 100.0 * k
 
 def thdn(wm: np.ndarray, mfilter: np.ndarray, fmask: np.ndarray) -> Tuple[float, float]:
-    tmp1 = wm * mfilter
-    vfund = np.dot(tmp1, tmp1)
+    vfund = np.sum(np.square(wm * mfilter))
     noise_mask = fmask - mfilter
-    tmp2 = wm * noise_mask
-    vnoise = np.dot(tmp2, tmp2)
+    vnoise = np.sum(np.square(wm * noise_mask))
     if vfund < 1e-100:
         return float("nan"), float("nan")
     k = math.sqrt(vnoise / vfund)
@@ -392,10 +386,8 @@ def snr(
 
     signal_mask = np.clip(analysis_filter, 0.0, 1.0)
     noise_mask = np.clip(fmask - analysis_filter - harmonics_mask, 0.0, 1.0)
-    tmp1 = wm * signal_mask
-    vsignal = np.dot(tmp1, tmp1)
-    tmp2 = wm * noise_mask
-    vnoise = np.dot(tmp2, tmp2)
+    vsignal = np.sum(np.square(wm * signal_mask))
+    vnoise = np.sum(np.square(wm * noise_mask))
 
     if vnoise < 1e-100:
         return float("nan")
@@ -436,13 +428,11 @@ def get_adc_format(bits: int) -> AdcFormat:
 def nearest_fft_size(x: int) -> int:
     if x < 2:
         raise ValueError("FFT size must be >= 2")
-    return 2 ** math.floor(math.log2(x) + 0.5)
+    return 2 ** round(math.log2(x))
 
 
 def noise_from_db(x: float) -> float:
-    if x < 0:
-        return 0.0
-    return 10 ** (-x / 20.0)
+    return 10 ** (x / 20.0)
 
 
 def get_window(name: str, chunk: int) -> np.ndarray:
@@ -684,7 +674,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--csv", type=str, default="", help="Append metrics to CSV")
     parser.add_argument("--window", type=str, default="hanning", help="Window function")
     parser.add_argument("--simfreq", type=float, default=0.0, help="Simulate exact frequency in Hz")
-    parser.add_argument("--simnoise", type=float, default=-100.0, help="Simulate noise amplitude in dB")
+    parser.add_argument("--simnoise", type=float, default=-160.0, help="Simulate noise amplitude in dB")
     parser.add_argument("--flttsh", type=float, default=160.0, help="Notch filter level in dB")
     parser.add_argument("--fndtsh", type=float, default=3.0, help="Fundamental voltage threshold in dB")
     parser.add_argument("--cftsh", type=float, default=0.25, help="Center frequency threshold in Hz")
