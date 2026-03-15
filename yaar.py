@@ -112,8 +112,6 @@ def notch(values: np.ndarray, level: float) -> np.ndarray:
     mask[values > level] = 1.0
     return mask
 
-
-
 def build_peak_mask(freqs: np.ndarray, center_freq: float, half_width_hz: float) -> np.ndarray:
     mask = np.zeros(len(freqs), dtype=float)
     if center_freq <= 0:
@@ -710,7 +708,9 @@ def init_csv(path: str) -> None:
 def fft_magnitude(meas: np.ndarray, window: np.ndarray) -> np.ndarray:
     spectrum = np.fft.rfft(meas * window)
     coherent_gain = np.sum(window) / len(window)
+    enbw = np.sum(window**2) / (np.sum(window)**2) * len(window)
     mag = np.abs(spectrum) / (len(meas) * coherent_gain)
+    mag /= math.sqrt(enbw)
     return mag
 
 def apply_freq_mask(values: np.ndarray, fmask: np.ndarray) -> np.ndarray:
@@ -1207,6 +1207,9 @@ def main() -> int:
         prev_carrier_idx = -1
         stable_count = 0
         write_after = 10 
+        AVG_COUNT = 8
+        fft_accum = np.zeros_like(freqs)
+        fft_frames = 0
 
         stream = open_stream(audio, cfg, adc)
         
@@ -1220,14 +1223,24 @@ def main() -> int:
             if len(meas) < 16:
                 raise RuntimeError("Measurement buffer too short.")
 
-            # Time-domain plot
-            plot_time(ax_time, ts, meas, time_range, voltage_range, formatter_s, formatter_v)
 
             # Time-domain metrics
             vpp, ppeak, vrms, prms = time_domain_analyse(meas, cfg.load_ohm)
 
             mag = compute_fft(meas, window, fmask)
 
+            if AVG_COUNT > 1:
+                fft_accum += mag**2
+                fft_frames += 1
+
+                if fft_frames < AVG_COUNT:
+                    continue
+
+                mag = np.sqrt(fft_accum / fft_frames)
+
+                fft_accum[:] = 0
+                fft_frames = 0
+            
             tones = analyze_tones(mag, freqs, ts, window, fmask, cfg)
 
             if prev_carrier_idx == tones.carrier_idx:
@@ -1238,6 +1251,7 @@ def main() -> int:
 
             metrics = compute_metrics(mag, freqs, tones, fmask, cfg)
 
+            plot_time(ax_time, ts, meas, time_range, voltage_range, formatter_s, formatter_v)
 
             plot_freq(ax_freq, freqs, mag, tones.wc, i_lo, i_hi,
                       freq_range, db_range, formatter_hz, formatter_db)
