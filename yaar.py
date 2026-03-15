@@ -1278,7 +1278,7 @@ def main() -> int:
 
             if AVG_COUNT > 1:
                 np.square(mag, out=mag)
-                fft_accum += mag
+                np.add(fft_accum, mag, out=fft_accum)
                 fft_frames += 1
 
                 if fft_frames < AVG_COUNT:
