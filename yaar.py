@@ -56,7 +56,6 @@ class AudioConfig:
     sim_hmncs: float
     thd_harmonics: int
     flt_threshold: float
-    fnd_threshold: float
     center_freq_threshold: float
     two_tone_rel_db: float
     peak_min_separation_hz: float
@@ -716,7 +715,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--simfreq", type=float, default=0.0, help="Simulate exact frequency in Hz")
     parser.add_argument("--simnoise", type=float, default=-160.0, help="Simulate noise amplitude in dB")
     parser.add_argument("--flttsh", type=float, default=160.0, help="Notch filter level in dB")
-    parser.add_argument("--fndtsh", type=float, default=3.0, help="Fundamental voltage threshold in dB")
     parser.add_argument("--cftsh", type=float, default=0.25, help="Center frequency threshold in Hz")
     parser.add_argument(
         "--twotone-rel-db",
@@ -1192,7 +1190,6 @@ def main() -> int:
         sim_hmncs=args.simhmncs,
         thd_harmonics=args.thd,
         flt_threshold=from_db(-args.flttsh),
-        fnd_threshold=from_db(-args.fndtsh),
         center_freq_threshold=args.cftsh,
         two_tone_rel_db=args.twotone_rel_db,
         peak_min_separation_hz=args.peak_sep_hz,
