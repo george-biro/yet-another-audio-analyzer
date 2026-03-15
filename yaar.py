@@ -52,6 +52,8 @@ class AudioConfig:
     sim_freq: float
     sim_freq2: float
     sim_noise: float
+    sim_amp2: float
+    sim_hmncs: float
     thd_harmonics: int
     flt_threshold: float
     fnd_threshold: float
@@ -369,7 +371,7 @@ def thd_ieee(wm: np.ndarray, mh: np.ndarray, wc: np.ndarray):
 
 def thdn(wm: np.ndarray, mfilter: np.ndarray, fmask: np.ndarray) -> Tuple[float, float]:
     vfund = np.sum(np.square(wm * mfilter))
-    noise_mask = fmask - mfilter
+    noise_mask = np.clip(fmask - mfilter, 0.0, 1.0)
     vnoise = np.sum(np.square(wm * noise_mask))
     if vfund < 1e-100:
         return float("nan"), float("nan")
@@ -454,15 +456,50 @@ def simulate_signal(
     freq_hz: float,
     noise_amp: float,
     ts: np.ndarray,
-    freq2_hz: float = 0.0,
-    amp2: float = 1.0,
+    freq2_hz: float,
+    amp2: float,
+    hmncs: float
 ) -> np.ndarray:
-    signal = np.sin(2.0 * np.pi * freq_hz * ts + random.random() * np.pi)
-    if freq2_hz > 0.0:
-        signal += amp2 * np.sin(2.0 * np.pi * freq2_hz * ts + random.random() * np.pi)
+
+    phase1 = random.random() * 2*np.pi
+    signal = np.sin(2*np.pi*freq_hz*ts + phase1)
+
+    # harmonics of fundamental
+    if hmncs > 0:
+        for h in range(2, 8):
+            amp = hmncs ** (h-1)
+            phase = random.random() * 2*np.pi
+            signal += amp * np.sin(2*np.pi*(freq_hz*h)*ts + phase)
+
+    if freq2_hz > 0:
+
+        phase2 = random.random() * 2*np.pi
+        signal += amp2 * np.sin(2*np.pi*freq2_hz*ts + phase2)
+
+        # harmonics of second tone
+        if hmncs > 0:
+            for h in range(2, 8):
+                amp = amp2 * (hmncs ** (h-1))
+                phase = random.random() * 2*np.pi
+                signal += amp * np.sin(2*np.pi*(freq2_hz*h)*ts + phase)
+
+        # IMD products
+        imd_amp = hmncs * amp2
+
+        # difference
+        signal += imd_amp * np.sin(2*np.pi*(freq2_hz - freq_hz)*ts)
+
+        # sum
+        signal += imd_amp * np.sin(2*np.pi*(freq2_hz + freq_hz)*ts)
+
+        # 3rd-order IMD (very common in amplifiers)
+        signal += imd_amp * np.sin(2*np.pi*(2*freq_hz - freq2_hz)*ts)
+        signal += imd_amp * np.sin(2*np.pi*(2*freq2_hz - freq_hz)*ts)
+
     if noise_amp > 1e-6:
         signal += np.random.normal(0.0, noise_amp, len(signal))
-    return signal 
+
+    return signal
 
 def get_coreaudio_device_id(audio: pyaudio.PyAudio, pa_index: int) -> int:
     info = audio.get_device_info_by_index(pa_index)
@@ -693,6 +730,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--simfreq2", type=float, default=0.0,
                     help="Second simulated tone frequency")
 
+    parser.add_argument("--simamp2", type=float, default=0.0,
+                    help="Second simulated tone amplitude")
+    parser.add_argument("--simhmncs", type=float, default=0.0,
+                    help="Add harmonics to the simulation")
     return parser
 
 
@@ -880,7 +921,12 @@ def build_single_tone_masks(
 
     wc = wclean_cached(ts, window, tone1_freq, cfg.flt_threshold, mag[carrier_idx])
     
-    analysis_filter = notch(wc, 1e-20) * fmask
+    bin_width = freqs[1] - freqs[0]
+    analysis_filter = build_peak_mask(
+        freqs,
+        tone1_freq,
+        2 * bin_width
+        )
     tone1_mask = signal_mask
     tone2_mask = np.zeros_like(mag)
 
@@ -1077,7 +1123,8 @@ def annotate_peaks(ax, freqs, mag, db_range, tones, cfg):
             if y <= 1e-10:
                 continue
 
-            y_db = 20 * math.log10(y)
+            #y_db = 20 * math.log10(y)
+            y_db = clean_log(y) - clean_log(mag).max()
             if y_db <= db_range[0]:
                 continue
 
@@ -1143,6 +1190,8 @@ def main() -> int:
         sim_freq=args.simfreq,
         sim_freq2=args.simfreq2,
         sim_noise=noise_from_db(args.simnoise),
+        sim_amp2=args.simamp2,
+        sim_hmncs=args.simhmncs,
         thd_harmonics=args.thd,
         flt_threshold=from_db(-args.flttsh),
         fnd_threshold=from_db(-args.fndtsh),
@@ -1219,7 +1268,7 @@ def main() -> int:
         t_start = time.time()
         while (time.time() - t_start < cfg.duration_s) and not closed["value"]:
             if stream is None:
-                meas = simulate_signal(cfg.sim_freq, cfg.sim_noise, ts, cfg.sim_freq2)
+                meas = simulate_signal(cfg.sim_freq, cfg.sim_noise, ts, cfg.sim_freq2, cfg.sim_amp2, cfg.sim_hmncs)
             else:
                 meas = read_measurement(stream, cfg, adc)
 
@@ -1233,7 +1282,8 @@ def main() -> int:
             mag = compute_fft(meas, window, fmask)
 
             if AVG_COUNT > 1:
-                fft_accum += mag**2
+                np.square(mag, out=mag)
+                fft_accum += mag
                 fft_frames += 1
 
                 if fft_frames < AVG_COUNT:
