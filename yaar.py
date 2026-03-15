@@ -75,7 +75,7 @@ class ToneState:
     tone2_freq: float
     tone1_mask: np.ndarray
     tone2_mask: np.ndarray
-    fundamental_mask: np.ndarray
+    signal_mask: np.ndarray
     harmonics_mask: np.ndarray
     analysis_filter: np.ndarray
     wc: np.ndarray
@@ -645,11 +645,17 @@ def init_csv(path: str) -> None:
                 "THDN_dB,THDN_pct,SNR_dB,ENOB,Vrms,Prms\n"
             )
 
-def compute_fft(meas, window, fmask):
-    spectrum_complex = np.fft.rfft(meas) * fmask
+def fft_magnitude(meas: np.ndarray, window: np.ndarray) -> np.ndarray:
     coherent_gain = np.sum(window) / len(window)
-    mag = np.abs(spectrum_complex) / (len(spectrum_complex) * coherent_gain)
+    spectrum = np.fft.rfft(meas)
+    mag = np.abs(spectrum) / (len(spectrum) * coherent_gain)
     return normalize_unit(mag)
+
+def apply_freq_mask(values: np.ndarray, fmask: np.ndarray) -> np.ndarray:
+    return values * fmask
+
+def compute_fft(meas: np.ndarray, window: np.ndarray, fmask: np.ndarray) -> np.ndarray:
+    return apply_freq_mask(fft_magnitude(meas, window), fmask)
 
 def plot_time(ax_time, ts, meas, time_range, voltage_range, formatter_s, formatter_v):
     ax_time.cla()
@@ -764,8 +770,85 @@ def get_ts(chunk, sample_rate, trange):
     ]
     return np.linspace(0.0, tmax, chunk, endpoint=False), time_range
 
-def analyze_tones(mag, freqs, ts, window, fmask, cfg) -> ToneState:
+def build_harmonics_mask(
+    size: int,
+    carrier_idx: int,
+    num_harmonics: int,
+    fmask: np.ndarray,
+) -> np.ndarray:
+    mask = np.zeros(size, dtype=float)
+    if carrier_idx > 0:
+        mask[carrier_idx::carrier_idx][:num_harmonics] = 1.0
+        mask[carrier_idx] = 0.0
+        mask *= fmask
+    return mask
 
+def build_single_tone_masks(
+    mag: np.ndarray,
+    freqs: np.ndarray,
+    ts: np.ndarray,
+    window: np.ndarray,
+    carrier_idx: int,
+    fmask: np.ndarray,
+    cfg: AudioConfig,
+) -> tuple[float, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    carrier_freq = freqs[carrier_idx]
+    peak_freq = calc_peak_freq(mag, freqs, carrier_idx, cfg.frq_threshold)
+
+    tone1_freq = (
+        carrier_freq
+        if abs(peak_freq - carrier_freq) < cfg.center_freq_threshold
+        else peak_freq
+    )
+
+    signal_mask = notch(mag, mag[carrier_idx] * cfg.fnd_threshold)
+    harmonics_mask = build_harmonics_mask(
+        len(mag), carrier_idx, cfg.thd_harmonics, fmask
+    )
+
+    wc = wclean(ts, window, tone1_freq, cfg.flt_threshold)
+    analysis_filter = notch(wc, 1e-20) * fmask
+
+    tone1_mask = signal_mask
+    tone2_mask = np.zeros_like(mag)
+
+    return tone1_freq, tone1_mask, tone2_mask, signal_mask, harmonics_mask, analysis_filter, wc
+
+def build_two_tone_masks(
+    mag: np.ndarray,
+    freqs: np.ndarray,
+    ts: np.ndarray,
+    window: np.ndarray,
+    idx1: int,
+    idx2: int,
+    fmask: np.ndarray,
+    cfg: AudioConfig,
+) -> tuple[float, float, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    tone1_freq = calc_peak_freq(mag, freqs, idx1, cfg.frq_threshold)
+    tone2_freq = calc_peak_freq(mag, freqs, idx2, cfg.frq_threshold)
+
+    tone1_mask = peak_band_from_synth(
+        ts, window, freqs, tone1_freq, cfg.flt_threshold
+    ) * fmask
+    tone2_mask = peak_band_from_synth(
+        ts, window, freqs, tone2_freq, cfg.flt_threshold
+    ) * fmask
+
+    signal_mask = np.clip(tone1_mask + tone2_mask, 0.0, 1.0)
+    harmonics_mask = np.zeros_like(mag)
+    analysis_filter = signal_mask
+    wc = tone1_mask + tone2_mask
+
+    return tone1_freq, tone2_freq, tone1_mask, tone2_mask, signal_mask, harmonics_mask, analysis_filter, wc
+
+def analyze_tones(
+    mag: np.ndarray,
+    freqs: np.ndarray,
+    ts: np.ndarray,
+    window: np.ndarray,
+    fmask: np.ndarray,
+    cfg: AudioConfig,
+) -> ToneState:
     peak_indices = find_top_two_peaks(
         mag,
         freqs,
@@ -775,65 +858,36 @@ def analyze_tones(mag, freqs, ts, window, fmask, cfg) -> ToneState:
     )
 
     imd_mode = len(peak_indices) >= 2
-
     carrier_idx = peak_indices[0] if peak_indices else int(np.argmax(mag))
-    carrier_freq = freqs[carrier_idx]
-
-    wc = np.zeros_like(mag)
 
     if not imd_mode:
-
-        fundamental_mask = notch(mag, mag[carrier_idx] * cfg.fnd_threshold)
-
-        harmonics_mask = np.zeros_like(mag)
-
-        if carrier_idx > 0:
-            harmonics_mask[carrier_idx::carrier_idx][: cfg.thd_harmonics] = 1.0
-            harmonics_mask[carrier_idx] = 0.0
-            harmonics_mask *= fmask
-
-        fundamental_freq = calc_peak_freq(
-            mag, freqs, carrier_idx, cfg.frq_threshold
+        (
+            tone1_freq,
+            tone1_mask,
+            tone2_mask,
+            signal_mask,
+            harmonics_mask,
+            analysis_filter,
+            wc,
+        ) = build_single_tone_masks(
+            mag, freqs, ts, window, carrier_idx, fmask, cfg
         )
 
-        chosen_freq = (
-            carrier_freq
-            if abs(fundamental_freq - carrier_freq) < cfg.center_freq_threshold
-            else fundamental_freq
-        )
-
-        wc = wclean(ts, window, chosen_freq, cfg.flt_threshold)
-
-        analysis_filter = notch(wc, 1e-20) * fmask
-
-        tone1_freq = chosen_freq
         tone2_freq = 0.0
-
-        tone1_mask = fundamental_mask
-        tone2_mask = np.zeros_like(mag)
-
     else:
-
         idx1, idx2 = peak_indices[:2]
-
-        tone1_freq = calc_peak_freq(mag, freqs, idx1, cfg.frq_threshold)
-        tone2_freq = calc_peak_freq(mag, freqs, idx2, cfg.frq_threshold)
-
-        tone1_mask = peak_band_from_synth(
-            ts, window, freqs, tone1_freq, cfg.flt_threshold
-        ) * fmask
-
-        tone2_mask = peak_band_from_synth(
-            ts, window, freqs, tone2_freq, cfg.flt_threshold
-        ) * fmask
-
-        fundamental_mask = np.clip(tone1_mask + tone2_mask, 0.0, 1.0)
-
-        harmonics_mask = np.zeros_like(mag)
-
-        analysis_filter = fundamental_mask
-
-        wc = tone1_mask + tone2_mask
+        (
+            tone1_freq,
+            tone2_freq,
+            tone1_mask,
+            tone2_mask,
+            signal_mask,
+            harmonics_mask,
+            analysis_filter,
+            wc,
+        ) = build_two_tone_masks(
+            mag, freqs, ts, window, idx1, idx2, fmask, cfg
+        )
 
     return ToneState(
         imd_mode=imd_mode,
@@ -842,16 +896,14 @@ def analyze_tones(mag, freqs, ts, window, fmask, cfg) -> ToneState:
         tone2_freq=tone2_freq,
         tone1_mask=tone1_mask,
         tone2_mask=tone2_mask,
-        fundamental_mask=fundamental_mask,
+        signal_mask=signal_mask,
         harmonics_mask=harmonics_mask,
         analysis_filter=analysis_filter,
         wc=wc,
     )
 
-def compute_metrics(mag, tones, freqs, fmask, cfg):
-
+def compute_metrics(mag, tones, freqs, fmask, cfg) -> Metrics:
     if not tones.imd_mode:
-
         thd_db, thd_pct = thd_ieee(
             mag,
             tones.harmonics_mask,
@@ -860,16 +912,14 @@ def compute_metrics(mag, tones, freqs, fmask, cfg):
 
         sinad_db, sinad_pct = thdn(
             mag,
-            tones.fundamental_mask,
+            tones.signal_mask,
             tones.analysis_filter,
             fmask,
         )
 
-        signal = np.sum(np.square(mag * tones.fundamental_mask))
-        noise = np.sum(np.square(mag * (fmask - tones.fundamental_mask)))
-
+        signal = np.sum(np.square(mag * tones.signal_mask))
+        noise = np.sum(np.square(mag * (fmask - tones.signal_mask)))
         snr_db = db_rel(math.sqrt(signal / noise))
-
         enob_bits = enob(sinad_db)
 
         imd_db = float("nan")
@@ -879,7 +929,6 @@ def compute_metrics(mag, tones, freqs, fmask, cfg):
         imd_diff_pct = float("nan")
 
     else:
-
         imd_db, imd_pct = imd_total(
             mag,
             tones.tone1_mask,
@@ -889,14 +938,14 @@ def compute_metrics(mag, tones, freqs, fmask, cfg):
 
         sinad_db, sinad_pct = thdn(
             mag,
-            tones.fundamental_mask,
+            tones.signal_mask,
             tones.analysis_filter,
             fmask,
         )
 
         snr_db = snr(
             mag,
-            tones.fundamental_mask,
+            tones.signal_mask,
             tones.analysis_filter,
             fmask,
             np.zeros_like(mag),
@@ -908,7 +957,6 @@ def compute_metrics(mag, tones, freqs, fmask, cfg):
         thd_pct = float("nan")
 
         bin_width_hz = cfg.sample_rate / cfg.chunk
-
         imd_diff_freq, imd_diff_db, imd_diff_pct = imd_ccif_difference(
             mag,
             freqs,
@@ -1101,7 +1149,31 @@ def main() -> int:
 
             tones = analyze_tones(mag, freqs, ts, window, fmask, cfg)
 
+            if prev_carrier_idx == tones.carrier_idx:
+                stable_count += 1
+            else:
+                stable_count = 0
+            prev_carrier_idx = tones.carrier_idx
+
             metrics = compute_metrics(mag, tones, freqs, fmask, cfg)
+
+
+            plot_freq(ax_freq, freqs, mag, tones.wc, i_lo, i_hi,
+                      freq_range, db_range, formatter_hz, formatter_db)
+
+            annotate_peaks(ax_freq, freqs, mag, db_range, tones, cfg)
+                    
+            render_status(skip2, tones, metrics, vpp, vrms, prms,
+                          cfg, best_freqs)
+
+            fig.canvas.draw_idle()
+            fig.canvas.flush_events()
+            time.sleep(0.01)
+
+            if stable_count == write_after and pic_base:
+                plt.savefig(
+                    f"{pic_base}_{tones.tone1_freq:.0f}Hz_{tones.tone2_freq:.0f}Hz{pic_ext}"
+                )
 
             if stable_count == write_after and args.csv:
 
@@ -1118,20 +1190,6 @@ def main() -> int:
                         f"{vrms},{prms}\n"
                     )
 
-            plot_freq(ax_freq, freqs, mag, tones.wc, i_lo, i_hi,
-                      freq_range, db_range, formatter_hz, formatter_db)
-
-            annotate_peaks(ax_freq, freqs, mag, db_range, tones, cfg)
-                    
-            render_status(skip2, tones, metrics, vpp, vrms, prms,
-                          cfg, best_freqs)
-
-            fig.canvas.draw_idle()
-            fig.canvas.flush_events()
-            time.sleep(0.01)
-
-            if stable_count == write_after and pic_base:
-                plt.savefig(f"{pic_base}_{tone1_freq:.0f}Hz_{tone2_freq:.0f}Hz{pic_ext}")
 
         return 0
 
