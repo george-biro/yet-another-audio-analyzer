@@ -128,16 +128,6 @@ def build_peak_mask(freqs: np.ndarray, center_freq: float, half_width_hz: float)
     mask[(freqs >= lo) & (freqs <= hi)] = 1.0
     return mask
 
-def peak_band_from_synth(
-    ts: np.ndarray,
-    window: np.ndarray,
-    freqs: np.ndarray,
-    center_freq: float,
-    floor_level: float,
-) -> np.ndarray:
-    wc = wclean(ts, window, center_freq, floor_level)
-    return notch(wc, 1e-20)
-
 def find_top_two_peaks(
     wm: np.ndarray,
     freqs: np.ndarray,
@@ -314,6 +304,7 @@ def clean_log(values: np.ndarray, floor: float = 1e-10) -> np.ndarray:
     clipped = np.maximum(values, floor)
     return 20.0 * np.log10(clipped)
 
+WCLEAN_CACHE: dict[tuple[float, int, float], np.ndarray] = {}
 
 def wclean(ts: np.ndarray, window: np.ndarray, center_freq: float, floor_level: float) -> np.ndarray:
     clean = np.sin(2.0 * np.pi * center_freq * ts) * window
@@ -321,6 +312,50 @@ def wclean(ts: np.ndarray, window: np.ndarray, center_freq: float, floor_level: 
     mag = normalize_unit(np.abs(spectrum) / len(ts))
     mag[mag < floor_level] = 0.0
     return mag
+
+def wclean_fast(
+    freqs: np.ndarray,
+    window_fft: np.ndarray,
+    center_freq: float,
+    floor_level: float,
+) -> np.ndarray:
+
+    size = len(window_fft)
+    out = np.zeros(size)
+
+    idx = nearest_index(freqs, center_freq)
+
+    # width of window spectral kernel
+    k = len(window_fft)
+
+    lo = max(0, idx - k//2)
+    hi = min(size, idx + k//2)
+
+    src_lo = k//2 - (idx - lo)
+    src_hi = src_lo + (hi - lo)
+
+    out[lo:hi] = window_fft[src_lo:src_hi]
+
+    out[out < floor_level] = 0.0
+
+    return out
+
+def wclean_cached(
+    ts: np.ndarray,
+    window: np.ndarray,
+    center_freq: float,
+    floor_level: float,
+) -> np.ndarray:
+
+    key = (round(center_freq, 6), len(ts), floor_level)
+
+    cached = WCLEAN_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    wc = wclean(ts, window, center_freq, floor_level)
+    WCLEAN_CACHE[key] = wc
+    return wc
 
 def rms(values: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.square(values))))
@@ -346,14 +381,23 @@ def thdn(wm: np.ndarray, mfund: np.ndarray, mfilter: np.ndarray, fmask: np.ndarr
     return db_rel(k), 100.0 * k
 
 
-def snr(wm: np.ndarray, mfund: np.ndarray, mfilter: np.ndarray, fmask: np.ndarray, mh: np.ndarray) -> float:
-    vsignal = np.sum(np.square(wm * mfund))
-    noise_mask = fmask - mfilter - mh
+def snr(
+    wm: np.ndarray,
+    analysis_filter: np.ndarray,
+    fmask: np.ndarray,
+    harmonics_mask: np.ndarray,
+) -> float:
+
+    signal_mask = np.clip(analysis_filter, 0.0, 1.0)
+    noise_mask = np.clip(fmask - analysis_filter - harmonics_mask, 0.0, 1.0)
+
+    vsignal = np.sum(np.square(wm * signal_mask))
     vnoise = np.sum(np.square(wm * noise_mask))
+
     if vnoise < 1e-100:
         return float("nan")
-    k = math.sqrt(vsignal / vnoise)
-    return db_rel(k)
+
+    return db_rel(math.sqrt(vsignal / vnoise))
 
 
 def enob(sinad_db: float) -> float:
@@ -417,7 +461,6 @@ def simulate_signal(
     freq_hz: float,
     noise_amp: float,
     ts: np.ndarray,
-    window: np.ndarray,
     freq2_hz: float = 0.0,
     amp2: float = 1.0,
 ) -> np.ndarray:
@@ -426,7 +469,7 @@ def simulate_signal(
         signal += amp2 * np.sin(2.0 * np.pi * freq2_hz * ts + random.random() * np.pi)
     if noise_amp > 1e-6:
         signal += np.random.normal(0.0, noise_amp, len(signal))
-    return signal * window
+    return signal 
 
 def get_coreaudio_device_id(audio: pyaudio.PyAudio, pa_index: int) -> int:
     info = audio.get_device_info_by_index(pa_index)
@@ -464,13 +507,13 @@ def open_stream(audio: pyaudio.PyAudio, cfg: AudioConfig, adc: AdcFormat) -> Opt
     )
 
 
-def read_measurement(stream: pyaudio.Stream, cfg: AudioConfig, adc: AdcFormat, window: np.ndarray) -> np.ndarray:
+def read_measurement(stream: pyaudio.Stream, cfg: AudioConfig, adc: AdcFormat) -> np.ndarray:
     data = stream.read(cfg.chunk + cfg.skip, exception_on_overflow=False)
     meas_full = np.frombuffer(data, dtype=adc.dtype)
 
     meas_full = meas_full[cfg.skip * cfg.channel_count :]
     meas_raw = meas_full[cfg.channel_select :: cfg.channel_count]
-    return meas_raw[: cfg.chunk] * window * (cfg.adc_range / adc.scale)
+    return meas_raw[: cfg.chunk] * (cfg.adc_range / adc.scale)
 
 def disable_safety_offset(device_id: int):
 
@@ -639,7 +682,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--window", type=str, default="hanning", help="Window function")
     parser.add_argument("--simfreq", type=float, default=0.0, help="Simulate exact frequency in Hz")
     parser.add_argument("--simnoise", type=float, default=-1.0, help="Simulate noise amplitude in dB")
-    parser.add_argument("--flttsh", type=float, default=120.0, help="Notch filter level in dB")
+    parser.add_argument("--flttsh", type=float, default=160.0, help="Notch filter level in dB")
     parser.add_argument("--fndtsh", type=float, default=3.0, help="Fundamental voltage threshold in dB")
     parser.add_argument("--frqtsh", type=float, default=40.0, help="Fundamental frequency threshold in dB")
     parser.add_argument("--cftsh", type=float, default=0.25, help="Center frequency threshold in Hz")
@@ -670,10 +713,10 @@ def init_csv(path: str) -> None:
             )
 
 def fft_magnitude(meas: np.ndarray, window: np.ndarray) -> np.ndarray:
+    spectrum = np.fft.rfft(meas * window)
     coherent_gain = np.sum(window) / len(window)
-    spectrum = np.fft.rfft(meas)
     mag = np.abs(spectrum) / (len(meas) * coherent_gain)
-    return normalize_unit(mag)
+    return mag
 
 def apply_freq_mask(values: np.ndarray, fmask: np.ndarray) -> np.ndarray:
     return values * fmask
@@ -832,7 +875,7 @@ def build_single_tone_masks(
         len(mag), carrier_idx, cfg.thd_harmonics, fmask
     )
 
-    wc = wclean(ts, window, tone1_freq, cfg.flt_threshold)
+    wc = wclean_cached(ts, window, tone1_freq, cfg.flt_threshold)
     analysis_filter = notch(wc, 1e-20) * fmask
 
     tone1_mask = signal_mask
@@ -850,26 +893,52 @@ def build_two_tone_masks(
     fmask: np.ndarray,
     cfg: AudioConfig,
 ) -> tuple[float, float, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+
     tone1_freq = calc_peak_freq_stable(
         mag, freqs, idx1, cfg.center_freq_threshold
     )
+
     tone2_freq = calc_peak_freq_stable(
         mag, freqs, idx2, cfg.center_freq_threshold
     )
 
-    tone1_mask = peak_band_from_synth(
-        ts, window, freqs, tone1_freq, cfg.flt_threshold
-    ) * fmask
-    tone2_mask = peak_band_from_synth(
-        ts, window, freqs, tone2_freq, cfg.flt_threshold
-    ) * fmask
+    # measured amplitudes
+    amp1 = mag[idx1]
+    amp2 = mag[idx2]
+
+    # avoid divide-by-zero
+    if amp1 < 1e-20 and amp2 < 1e-20:
+        amp1 = amp2 = 1.0
+
+    # normalize ratio
+    scale = max(amp1, amp2)
+    a1 = amp1 / scale
+    a2 = amp2 / scale
+
+    wc1 = wclean_cached(ts, window, tone1_freq, cfg.flt_threshold)
+    wc2 = wclean_cached(ts, window, tone2_freq, cfg.flt_threshold)
+
+    wc = a1 * wc1 + a2 * wc2
+
+    tone1_mask = notch(wc1, 1e-20) * fmask
+    tone2_mask = notch(wc2, 1e-20) * fmask
 
     signal_mask = np.clip(tone1_mask + tone2_mask, 0.0, 1.0)
-    harmonics_mask = np.zeros_like(mag)
-    analysis_filter = signal_mask
-    wc = tone1_mask + tone2_mask
 
-    return tone1_freq, tone2_freq, tone1_mask, tone2_mask, signal_mask, harmonics_mask, analysis_filter, wc
+    harmonics_mask = np.zeros_like(mag)
+
+    analysis_filter = notch(wc, 1e-20) * fmask
+
+    return (
+        tone1_freq,
+        tone2_freq,
+        tone1_mask,
+        tone2_mask,
+        signal_mask,
+        harmonics_mask,
+        analysis_filter,
+        wc,
+    )
 
 def analyze_tones(
     mag: np.ndarray,
@@ -933,6 +1002,15 @@ def analyze_tones(
     )
 
 def compute_metrics(mag, tones, freqs, fmask, cfg) -> Metrics:
+
+    snr_db = snr(
+        mag,
+        tones.analysis_filter,
+        fmask,
+        tones.harmonics_mask,
+    )
+    enob_bits = enob(snr_db)
+
     if not tones.imd_mode:
         thd_db, thd_pct = thd_ieee(
             mag,
@@ -942,18 +1020,10 @@ def compute_metrics(mag, tones, freqs, fmask, cfg) -> Metrics:
 
         sinad_db, sinad_pct = thdn(
             mag,
-            tones.signal_mask,
+            tones.analysis_filter,
             tones.analysis_filter,
             fmask,
         )
-
-        signal = np.sum(np.square(mag * tones.signal_mask))
-        noise = np.sum(np.square(mag * (fmask - tones.signal_mask)))
-        if noise <= 1e-100:
-            snr_db = float("nan")
-        else:
-            snr_db = db_rel(math.sqrt(signal / noise))
-        enob_bits = enob(sinad_db)
 
         imd_db = float("nan")
         imd_pct = float("nan")
@@ -968,24 +1038,9 @@ def compute_metrics(mag, tones, freqs, fmask, cfg) -> Metrics:
             tones.tone2_mask,
             fmask,
         )
-
-        sinad_db, sinad_pct = thdn(
-            mag,
-            tones.signal_mask,
-            tones.analysis_filter,
-            fmask,
-        )
-
-        snr_db = snr(
-            mag,
-            tones.signal_mask,
-            tones.analysis_filter,
-            fmask,
-            np.zeros_like(mag),
-        )
-
-        enob_bits = enob(sinad_db)
-
+        
+        sinad_db = float("nan")
+        sinad_pct = float("nan")
         thd_db = float("nan")
         thd_pct = float("nan")
 
@@ -1165,9 +1220,9 @@ def main() -> int:
         t_start = time.time()
         while (time.time() - t_start < cfg.duration_s) and not closed["value"]:
             if stream is None:
-                meas = simulate_signal(cfg.sim_freq, cfg.sim_noise, ts, window, cfg.sim_freq2)
+                meas = simulate_signal(cfg.sim_freq, cfg.sim_noise, ts, cfg.sim_freq2)
             else:
-                meas = read_measurement(stream, cfg, adc, window)
+                meas = read_measurement(stream, cfg, adc)
 
             if len(meas) < 16:
                 raise RuntimeError("Measurement buffer too short.")
