@@ -28,6 +28,71 @@ plt.ion()
 EPS = 1e-20
 
 
+def simulate_signal(
+    freq_hz: float,
+    noise_amp: float,
+    ts: np.ndarray,
+    freq2_hz: float,
+    amp2: float,
+    hmncs: float,
+    num_hmncs: int
+) -> np.ndarray:
+
+    phase1 = random.random() * 2*np.pi
+    sig1 = np.sin(2*np.pi*freq_hz*ts + phase1)
+
+    signal = sig1.copy()
+
+    if freq2_hz > 0:
+        phase2 = random.random() * 2*np.pi
+        sig2 = amp2 * np.sin(2*np.pi*freq2_hz*ts + phase2)
+        signal += sig2
+    else:
+        sig2 = np.zeros_like(ts)
+
+    if hmncs > 0:
+
+        distortion = np.zeros_like(ts)
+
+        # harmonic amplitude shape
+        weights = np.array([1.0/h for h in range(2, num_hmncs+1)])
+        norm = np.sqrt(np.sum(weights**2))
+        weights /= norm
+
+        # harmonics of tone1
+        for i, h in enumerate(range(2, num_hmncs+1)):
+            phase = random.random() * 2*np.pi
+            distortion += hmncs * weights[i] * np.sin(2*np.pi*(freq_hz*h)*ts + phase)
+
+        if freq2_hz > 0:
+
+            # harmonics of tone2
+            for i, h in enumerate(range(2, num_hmncs+1)):
+                phase = random.random() * 2*np.pi
+                distortion += amp2 * hmncs * weights[i] * np.sin(2*np.pi*(freq2_hz*h)*ts + phase)
+
+            # IMD products (normalized like harmonics)
+            imd_freqs = [
+                abs(freq2_hz - freq_hz),
+                freq2_hz + freq_hz,
+                abs(2*freq_hz - freq2_hz),
+                abs(2*freq2_hz - freq_hz),
+            ]
+
+            imd_weights = np.ones(len(imd_freqs))
+            imd_weights /= np.sqrt(np.sum(imd_weights**2))
+
+            for w, f in zip(imd_weights, imd_freqs):
+                phase = random.random() * 2*np.pi
+                distortion += hmncs * w * np.sin(2*np.pi*f*ts + phase)
+
+        signal += distortion
+
+    if noise_amp > 1e-6:
+        signal += np.random.normal(0.0, noise_amp, len(signal))
+
+    return signal
+
 class CustomHelpFormatter(argparse.HelpFormatter):
     def _get_help_string(self, action):
         help_text = action.help
@@ -463,54 +528,6 @@ def get_window(name: str, chunk: int) -> np.ndarray:
     raise ValueError(f"Unsupported window: {name}")
 
 
-def simulate_signal(
-    freq_hz: float,
-    noise_amp: float,
-    ts: np.ndarray,
-    freq2_hz: float,
-    amp2: float,
-    hmncs: float
-) -> np.ndarray:
-
-    phase1 = random.random() * 2*np.pi
-    signal = np.sin(2*np.pi*freq_hz*ts + phase1)
-
-    # harmonics of fundamental
-    if hmncs > 0:
-        for h in range(2, 8):
-            amp = hmncs ** (h-1)
-            phase = random.random() * 2*np.pi
-            signal += amp * np.sin(2*np.pi*(freq_hz*h)*ts + phase)
-
-    if freq2_hz > 0:
-
-        phase2 = random.random() * 2*np.pi
-        signal += amp2 * np.sin(2*np.pi*freq2_hz*ts + phase2)
-
-        # harmonics of second tone
-        if hmncs > 0:
-            for h in range(2, 8):
-                amp = amp2 * (hmncs ** (h-1))
-                phase = random.random() * 2*np.pi
-                signal += amp * np.sin(2*np.pi*(freq2_hz*h)*ts + phase)
-
-        # IMD products
-        imd_amp = hmncs * amp2
-
-        # difference
-        signal += imd_amp * np.sin(2*np.pi*(freq2_hz - freq_hz)*ts)
-
-        # sum
-        signal += imd_amp * np.sin(2*np.pi*(freq2_hz + freq_hz)*ts)
-
-        # 3rd-order IMD (very common in amplifiers)
-        signal += imd_amp * np.sin(2*np.pi*(2*freq_hz - freq2_hz)*ts)
-        signal += imd_amp * np.sin(2*np.pi*(2*freq2_hz - freq_hz)*ts)
-
-    if noise_amp > 1e-6:
-        signal += np.random.normal(0.0, noise_amp, len(signal))
-
-    return signal
 
 def get_coreaudio_device_id(audio: pyaudio.PyAudio, pa_index: int) -> int:
     info = audio.get_device_info_by_index(pa_index)
@@ -1287,7 +1304,7 @@ def main() -> int:
         t_start = time.time()
         while (time.time() - t_start < cfg.duration_s) and not closed["value"]:
             if stream is None:
-                meas = simulate_signal(cfg.sim_freq, cfg.sim_noise, ts, cfg.sim_freq2, cfg.sim_amp2, cfg.sim_hmncs)
+                meas = simulate_signal(cfg.sim_freq, cfg.sim_noise, ts, cfg.sim_freq2, cfg.sim_amp2, cfg.sim_hmncs, cfg.thd_harmonics)
             else:
                 meas = read_measurement(stream, cfg, adc)
 
