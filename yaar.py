@@ -422,33 +422,22 @@ def wclean_cached(
 def rms(values: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.square(values))))
 
-def thd_ieee(wm: np.ndarray, mh: np.ndarray, wc: np.ndarray):
-    """
-    THD using window-clean matched filter for fundamental.
-    """
-
-    fund = wm * wc
-    vfund = np.dot(fund, fund) / max(np.dot(wc, wc), EPS)
-
+def thd_ieee(wm: np.ndarray, tone1_mask: np.ndarray, mh: np.ndarray):
+    vfund = np.sum(np.square(wm * tone1_mask))
     if vfund <= EPS:
         return float("nan"), float("nan")
 
     vharm = np.sum(np.square(wm * mh))
-
     k = math.sqrt(vharm / vfund)
-
     return db_rel(k), 100.0 * k
 
-def thdn(wm: np.ndarray, wc: np.ndarray, fmask: np.ndarray):
-
-    fund = wm * wc
-    vfund = np.dot(fund, fund) / max(np.dot(wc, wc), EPS)
-
-    noise_mask = np.clip(fmask - notch(wc, 1e-20), 0.0, 1.0)
-    vnoise = np.sum(np.square(wm * noise_mask))
-
-    if vfund < EPS:
+def thdn(wm: np.ndarray, tone1_mask: np.ndarray, fmask: np.ndarray):
+    vfund = np.sum(np.square(wm * tone1_mask))
+    if vfund <= EPS:
         return float("nan"), float("nan")
+
+    noise_mask = np.clip(fmask - tone1_mask, 0.0, 1.0)
+    vnoise = np.sum(np.square(wm * noise_mask))
 
     k = math.sqrt(vnoise / vfund)
     return db_rel(k), 100.0 * k
@@ -913,7 +902,7 @@ def build_harmonics_mask(freqs, tone_freq, num_harmonics, fmask):
     mask = np.zeros(len(freqs), dtype=float)
 
     bin_width = freqs[1] - freqs[0]
-    width = max(2 * bin_width, 2.0)
+    width = 1.5 * bin_width
 
     for h in range(2, num_harmonics + 1):
 
@@ -951,7 +940,8 @@ def build_single_tone_masks(
 
     wc = wclean_cached(ts, window, tone1_freq, cfg.flt_threshold, mag[carrier_idx])
 
-    tone1_mask = notch(wc, 1e-20) * fmask
+    bin_width = freqs[1] - freqs[0]
+    tone1_mask = build_peak_mask(freqs, tone1_freq, 1.5 * bin_width) * fmask
 
     harmonics_mask = build_harmonics_mask(
         freqs,
@@ -965,7 +955,7 @@ def build_single_tone_masks(
     analysis_filter = build_peak_mask(
         freqs,
         tone1_freq,
-        2 * bin_width
+        1.5 * bin_width
     )
     tone2_mask = np.zeros_like(mag)
 
@@ -1091,13 +1081,13 @@ def compute_metrics(mag, freqs, tones, fmask, cfg) -> Metrics:
     if not tones.imd_mode:
         thd_db, thd_pct = thd_ieee(
             mag,
+            tones.tone1_mask,
             tones.harmonics_mask,
-            tones.wc,
         )
 
         sinad_db, sinad_pct = thdn(
             mag,
-            tones.wc,
+            tones.tone1_mask,
             fmask,
         )
 
@@ -1126,7 +1116,7 @@ def compute_metrics(mag, freqs, tones, fmask, cfg) -> Metrics:
             freqs,
             tones.tone1_freq,
             tones.tone2_freq,
-            half_width_hz=max(2.0 * bin_width_hz, 2.0),
+            half_width_hz= 1.5 * bin_width_hz,
         )
 
     return Metrics(
