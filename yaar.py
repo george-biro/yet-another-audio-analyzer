@@ -40,20 +40,16 @@ def simulate_signal(
 
     phase1 = random.random() * 2*np.pi
     sig1 = np.sin(2*np.pi*freq_hz*ts + phase1)
-
     signal = sig1.copy()
 
     if freq2_hz > 0:
         phase2 = random.random() * 2*np.pi
         sig2 = amp2 * np.sin(2*np.pi*freq2_hz*ts + phase2)
         signal += sig2
-    else:
-        sig2 = np.zeros_like(ts)
 
     if hmncs > 0:
 
-        thd_dist = np.zeros_like(ts)
-        imd_dist = np.zeros_like(ts)
+        dist = np.zeros_like(ts)
 
         # harmonic amplitude shape
         weights = np.array([1.0/h for h in range(2, num_hmncs+1)])
@@ -61,17 +57,13 @@ def simulate_signal(
         weights /= norm
 
         # harmonics of tone1
-        for i, h in enumerate(range(2, num_hmncs+1)):
-            phase = random.random() * 2*np.pi
-            thd_dist += weights[i] * np.sin(2*np.pi*(freq_hz*h)*ts + phase)
 
-        if freq2_hz > 0:
-
-            # harmonics of tone2
+        if freq2_hz <= 0:
+            # THD case
             for i, h in enumerate(range(2, num_hmncs+1)):
                 phase = random.random() * 2*np.pi
-                thd_dist += amp2 * weights[i] * np.sin(2*np.pi*(freq2_hz*h)*ts + phase)
-
+                dist += weights[i] * np.sin(2*np.pi*(freq_hz*h)*ts + phase)
+        else:
             # IMD products (normalized like harmonics)
             imd_freqs = [
                 abs(freq2_hz - freq_hz),
@@ -85,23 +77,13 @@ def simulate_signal(
 
             for w, f in zip(imd_weights, imd_freqs):
                 phase = random.random() * 2*np.pi
-                imd_dist += w * np.sin(2*np.pi*f*ts + phase)
+                dist += w * np.sin(2*np.pi*f*ts + phase)
 
         # --- scale THD distortion ---
         p_sig = np.dot(signal,signal)
-        p_thd = np.dot(thd_dist,thd_dist)
-
-        if p_thd > 0:
-            thd_dist *= (hmncs * np.sqrt(p_sig/p_thd))
-
-        # --- scale IMD distortion ---
-        p_imd = np.dot(imd_dist,imd_dist)
-
-        if p_imd > 0:
-            imd_dist *= (hmncs * np.sqrt(p_sig/p_imd))
-
-        signal += thd_dist
-        signal += imd_dist
+        p_dist = np.dot(dist,dist)
+        dist *= (hmncs * np.sqrt(p_sig/p_dist))
+        signal += dist
 
     if noise_amp > 1e-6:
         signal += np.random.normal(0.0, noise_amp, len(signal))
@@ -320,21 +302,21 @@ def imd_total(
     mfund2: np.ndarray,
     fmask: np.ndarray,
 ) -> tuple[float, float]:
-    """
-    General-purpose IMD metric:
-    unwanted energy divided by wanted energy, where wanted energy
-    is the sum of the two fundamentals.
-    """
-    msig = np.clip(mfund1 + mfund2, 0.0, 1.0)
-    mnoise = np.clip(fmask - msig, 0.0, 1.0)
 
-    vsig = np.sum(np.square(wm * msig))
-    vdist = np.sum(np.square(wm * mnoise))
+    msig = np.clip(mfund1 + mfund2, 0.0, 1.0)
+
+    # fundamental power using full window kernel
+    vsig = np.sum((wm * msig) ** 2)
+
+    # distortion = everything except fundamentals
+    mnoise = np.clip(fmask - msig, 0.0, 1.0)
+    vdist = np.sum((wm * mnoise) ** 2)
 
     if vsig < 1e-100:
         return float("nan"), float("nan")
 
     k = math.sqrt(vdist / vsig)
+
     return db_rel(k), 100.0 * k
 
 def imd_ccif_difference(
