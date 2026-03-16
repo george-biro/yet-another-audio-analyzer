@@ -52,7 +52,8 @@ def simulate_signal(
 
     if hmncs > 0:
 
-        distortion = np.zeros_like(ts)
+        thd_dist = np.zeros_like(ts)
+        imd_dist = np.zeros_like(ts)
 
         # harmonic amplitude shape
         weights = np.array([1.0/h for h in range(2, num_hmncs+1)])
@@ -62,14 +63,14 @@ def simulate_signal(
         # harmonics of tone1
         for i, h in enumerate(range(2, num_hmncs+1)):
             phase = random.random() * 2*np.pi
-            distortion += hmncs * weights[i] * np.sin(2*np.pi*(freq_hz*h)*ts + phase)
+            thd_dist += weights[i] * np.sin(2*np.pi*(freq_hz*h)*ts + phase)
 
         if freq2_hz > 0:
 
             # harmonics of tone2
             for i, h in enumerate(range(2, num_hmncs+1)):
                 phase = random.random() * 2*np.pi
-                distortion += amp2 * hmncs * weights[i] * np.sin(2*np.pi*(freq2_hz*h)*ts + phase)
+                thd_dist += amp2 * weights[i] * np.sin(2*np.pi*(freq2_hz*h)*ts + phase)
 
             # IMD products (normalized like harmonics)
             imd_freqs = [
@@ -84,9 +85,23 @@ def simulate_signal(
 
             for w, f in zip(imd_weights, imd_freqs):
                 phase = random.random() * 2*np.pi
-                distortion += hmncs * w * np.sin(2*np.pi*f*ts + phase)
+                imd_dist += w * np.sin(2*np.pi*f*ts + phase)
 
-        signal += distortion
+        # --- scale THD distortion ---
+        p_sig = np.dot(signal,signal)
+        p_thd = np.dot(thd_dist,thd_dist)
+
+        if p_thd > 0:
+            thd_dist *= (hmncs * np.sqrt(p_sig/p_thd))
+
+        # --- scale IMD distortion ---
+        p_imd = np.dot(imd_dist,imd_dist)
+
+        if p_imd > 0:
+            imd_dist *= (hmncs * np.sqrt(p_sig/p_imd))
+
+        signal += thd_dist
+        signal += imd_dist
 
     if noise_amp > 1e-6:
         signal += np.random.normal(0.0, noise_amp, len(signal))
@@ -523,7 +538,7 @@ def get_coreaudio_device_id(audio: pyaudio.PyAudio, pa_index: int) -> int:
     return int(info["index"])
 
 def open_stream(audio: pyaudio.PyAudio, cfg: AudioConfig, adc: AdcFormat) -> Optional[pyaudio.Stream]:
-    if cfg.device_index < 0 or cfg.sim_freq >= 0.01:
+    if cfg.device_index < 0 :
         return None
 
     device_info = audio.get_device_info_by_index(cfg.device_index)
@@ -1206,7 +1221,7 @@ def main() -> int:
         sample_rate=args.freq,
         chunk=chunk,
         skip=args.skip,
-        device_index=args.dev,
+        device_index=args.dev if args.simfreq <= 0 else -1,
         channel_select=args.chsel,
         channel_count=args.chnum,
         adc_range=args.adcrng,
@@ -1230,18 +1245,19 @@ def main() -> int:
     freq_range = [10.0, args.frange]
     db_range = [args.wrange, 0.0]
 
-    audio = pyaudio.PyAudio()
     stream = None
     
     try:
+        audio = pyaudio.PyAudio()
         if args.list:
             list_sound_devices(audio)
             return 0
-
-        device_id = get_coreaudio_device_id(audio, cfg.device_index)
-        disable_voice_processing(device_id)
-        disable_safety_offset(device_id)
-        enable_pro_audio_mode(device_id)
+        
+        if cfg.device_index >= 0:
+            device_id = get_coreaudio_device_id(audio, cfg.device_index)
+            disable_voice_processing(device_id)
+            disable_safety_offset(device_id)
+            enable_pro_audio_mode(device_id)
 
         window = get_window(cfg.window_name, cfg.chunk)
         init_csv(args.csv)
