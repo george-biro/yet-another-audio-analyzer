@@ -21,7 +21,7 @@ from typing import Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pyaudio
+import sounddevice as sd
 from matplotlib.ticker import EngFormatter
 
 plt.ion()
@@ -107,7 +107,6 @@ class AudioConfig:
     channel_select: int
     channel_count: int
     adc_range: float
-    adc_resolution: int
     load_ohm: float
     duration_s: int
     window_name: str
@@ -122,11 +121,6 @@ class AudioConfig:
     two_tone_rel_db: float
     peak_min_separation_hz: float
 
-@dataclass
-class AdcFormat:
-    pa_format: int
-    dtype: np.dtype
-    scale: float
 
 @dataclass
 class ToneState:
@@ -154,14 +148,52 @@ class Metrics:
     snr_db: float
     enob_bits: float
 
-def list_sound_devices(audio: pyaudio.PyAudio) -> None:
-    host = 0
-    info = audio.get_host_api_info_by_index(host)
-    num_devices = info.get("deviceCount", 0)
-    for i in range(num_devices):
-        dev = audio.get_device_info_by_host_api_device_index(host, i)
-        if dev.get("maxInputChannels", 0) > 0:
-            print(f"Input Device id {i} - {dev.get('name')}")
+class RingBuffer:
+    def __init__(self, size, channels):
+        self.buf = np.zeros((size, channels), dtype=np.float32)
+        self.size = size
+        self.channels = channels
+        self.write = 0
+        self.filled = 0
+
+    def push(self, data):
+        n = len(data)
+
+        if n >= self.size:
+            self.buf[:] = data[-self.size:]
+            self.write = 0
+            self.filled = self.size
+            return
+
+        end = self.write + n
+
+        if end <= self.size:
+            self.buf[self.write:end] = data
+        else:
+            k = self.size - self.write
+            self.buf[self.write:] = data[:k]
+            self.buf[:end % self.size] = data[k:]
+
+        self.write = end % self.size
+        self.filled = min(self.size, self.filled + n)
+
+    def get_latest(self, n):
+        if self.filled < n:
+            return None
+
+        start = (self.write - n) % self.size
+
+        if start + n <= self.size:
+            return self.buf[start:start+n]
+        else:
+            k = self.size - start
+            return np.vstack((self.buf[start:], self.buf[:n-k]))
+
+def list_sound_devices() -> None:
+    devices = sd.query_devices()
+    for i, dev in enumerate(devices):
+        if dev["max_input_channels"] > 0:
+            print(f"Input Device id {i} - {dev['name']}")
 
 def db_rel(k: float) -> float:
     return float("nan") if k <= 0 else 20.0 * math.log10(k)
@@ -475,18 +507,6 @@ def is_prime(n: int) -> bool:
     return all(n % i for i in range(3, int(math.sqrt(n)) + 1, 2))
 
 
-
-def get_adc_format(bits: int) -> AdcFormat:
-    if bits == 16:
-        return AdcFormat(pyaudio.paInt16, np.int16, 2**15)
-    if bits == 24:
-        # Stored in 32-bit container for PyAudio compatibility.
-        return AdcFormat(pyaudio.paInt32, np.int32, 2**24)
-    if bits == 32:
-        return AdcFormat(pyaudio.paFloat32, np.float32, 1.0)
-    raise ValueError("Invalid ADC resolution. Use 16, 24, or 32.")
-
-
 def nearest_fft_size(x: int) -> int:
     if x < 2:
         raise ValueError("FFT size must be >= 2")
@@ -514,189 +534,48 @@ def get_window(name: str, chunk: int) -> np.ndarray:
     raise ValueError(f"Unsupported window: {name}")
 
 
-
-def get_coreaudio_device_id(audio: pyaudio.PyAudio, pa_index: int) -> int:
-    info = audio.get_device_info_by_index(pa_index)
-    return int(info["index"])
-
-def open_stream(audio: pyaudio.PyAudio, cfg: AudioConfig, adc: AdcFormat) -> Optional[pyaudio.Stream]:
-    if cfg.device_index < 0 :
+def open_stream(cfg: AudioConfig):
+    if cfg.device_index < 0:
         return None
 
-    device_info = audio.get_device_info_by_index(cfg.device_index)
-    max_channels = int(device_info.get("maxInputChannels", 0))
-    if max_channels < 1:
-        raise RuntimeError(f"Device '{device_info.get('name')}' has no input channels.")
+    device_info = sd.query_devices(cfg.device_index)
 
-    if cfg.channel_count > max_channels:
-        print(
-            f"Warning: Device '{device_info.get('name')}' supports only "
-            f"{max_channels} input channel(s). Adjusting from {cfg.channel_count}."
-        )
-        cfg.channel_count = max_channels
+    if device_info["max_input_channels"] < 1:
+        raise RuntimeError(f"Device '{device_info['name']}' has no input channels.")
 
-    if cfg.channel_select < 0 or cfg.channel_select >= cfg.channel_count:
-        raise ValueError(
-            f"--chsel must be between 0 and {cfg.channel_count - 1} for --chnum {cfg.channel_count}"
-        )
+    if cfg.channel_count > device_info["max_input_channels"]:
+        print(f"Adjusting channels to {device_info['max_input_channels']}")
+        cfg.channel_count = device_info["max_input_channels"]
 
-    return audio.open(
-        format=adc.pa_format,
-        rate=cfg.sample_rate,
+    if cfg.channel_select >= cfg.channel_count:
+        raise ValueError("Invalid channel selection")
+
+    stream = sd.InputStream(
+        samplerate=cfg.sample_rate,
+        device=cfg.device_index,
         channels=cfg.channel_count,
-        input=True,
-        input_device_index=cfg.device_index,
-        frames_per_buffer=cfg.chunk + cfg.skip,
-        start=True,
+        dtype="float32",
+        blocksize=0,
+        latency="low"
     )
 
+    stream.start()
+    return stream
 
-def read_measurement(stream: pyaudio.Stream, cfg: AudioConfig, adc: AdcFormat) -> np.ndarray:
-    data = stream.read(cfg.chunk + cfg.skip, exception_on_overflow=False)
-    meas_full = np.frombuffer(data, dtype=adc.dtype)
 
-    meas_full = meas_full[cfg.skip * cfg.channel_count :]
-    meas_raw = meas_full[cfg.channel_select :: cfg.channel_count]
-    return meas_raw[: cfg.chunk] * (cfg.adc_range / adc.scale)
+def read_measurement(stream, cfg: AudioConfig, ring: RingBuffer):
 
-def disable_safety_offset(device_id: int):
+    data, _ = stream.read(4096)
 
-    coreaudio = ctypes.cdll.LoadLibrary(
-        "/System/Library/Frameworks/CoreAudio.framework/CoreAudio"
-    )
+    ring.push(data)
 
-    UInt32 = ctypes.c_uint32
+    block = ring.get_latest(cfg.chunk + cfg.skip)
+    if block is None:
+        return None
 
-    class AudioObjectPropertyAddress(ctypes.Structure):
-        _fields_ = [
-            ("mSelector", UInt32),
-            ("mScope", UInt32),
-            ("mElement", UInt32),
-        ]
+    block = block[cfg.skip:, :]
+    return block[:, cfg.channel_select] * cfg.adc_range
 
-    kAudioDevicePropertySafetyOffset = 1935764583
-    kAudioObjectPropertyScopeInput = 1768845428
-    kAudioObjectPropertyElementMaster = 0
-
-    addr = AudioObjectPropertyAddress(
-        kAudioDevicePropertySafetyOffset,
-        kAudioObjectPropertyScopeInput,
-        kAudioObjectPropertyElementMaster,
-    )
-
-    value = UInt32(0)
-    size = UInt32(ctypes.sizeof(value))
-
-    coreaudio.AudioObjectSetPropertyData(
-        UInt32(device_id),
-        ctypes.byref(addr),
-        0,
-        None,
-        size,
-        ctypes.byref(value),
-    )
-
-    print("Safety offset disabled")
-
-def disable_voice_processing(device_index: int):
-    """
-    Disable CoreAudio voice processing (AGC, echo cancel, HPF)
-    for the selected input device.
-    """
-
-    try:
-        coreaudio = ctypes.cdll.LoadLibrary(
-            "/System/Library/Frameworks/CoreAudio.framework/CoreAudio"
-        )
-
-        UInt32 = ctypes.c_uint32
-
-        class AudioObjectPropertyAddress(ctypes.Structure):
-            _fields_ = [
-                ("mSelector", UInt32),
-                ("mScope", UInt32),
-                ("mElement", UInt32),
-            ]
-
-        # CoreAudio constants
-        kAudioDevicePropertyVoiceProcessingEnable = 1987078511
-        kAudioObjectPropertyScopeInput = 1768845428
-        kAudioObjectPropertyElementMaster = 0
-
-        addr = AudioObjectPropertyAddress(
-            kAudioDevicePropertyVoiceProcessingEnable,
-            kAudioObjectPropertyScopeInput,
-            kAudioObjectPropertyElementMaster,
-        )
-
-        value = UInt32(0)
-        size = UInt32(ctypes.sizeof(value))
-
-        device_id = UInt32(device_index)
-
-        coreaudio.AudioObjectSetPropertyData(
-            device_id,
-            ctypes.byref(addr),
-            0,
-            None,
-            size,
-            ctypes.byref(value),
-        )
-
-        print(f"Voice processing disabled for device {device_index}")
-
-    except Exception as e:
-        print("Voice processing disable failed:", e)
-
-def enable_pro_audio_mode(device_id: int):
-    """
-    Enable CoreAudio pro-audio behavior:
-    - hog mode (exclusive access)
-    - minimal safety offset
-    - disables most system DSP
-    """
-
-    try:
-        coreaudio = ctypes.cdll.LoadLibrary(
-            "/System/Library/Frameworks/CoreAudio.framework/CoreAudio"
-        )
-
-        UInt32 = ctypes.c_uint32
-        pid = UInt32(os.getpid())
-
-        class AudioObjectPropertyAddress(ctypes.Structure):
-            _fields_ = [
-                ("mSelector", UInt32),
-                ("mScope", UInt32),
-                ("mElement", UInt32),
-            ]
-
-        # constants
-        kAudioDevicePropertyHogMode = 1752132965
-        kAudioObjectPropertyScopeGlobal = 1735159650
-        kAudioObjectPropertyElementMaster = 0
-
-        addr = AudioObjectPropertyAddress(
-            kAudioDevicePropertyHogMode,
-            kAudioObjectPropertyScopeGlobal,
-            kAudioObjectPropertyElementMaster,
-        )
-
-        size = UInt32(ctypes.sizeof(pid))
-
-        coreaudio.AudioObjectSetPropertyData(
-            UInt32(device_id),
-            ctypes.byref(addr),
-            0,
-            None,
-            size,
-            ctypes.byref(pid),
-        )
-
-        print(f"Pro Audio (hog) mode enabled for device {device_id}")
-
-    except Exception as e:
-        print("Could not enable Pro Audio mode:", e)
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -713,7 +592,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--chunk", type=int, default=32768, help="FFT size")
     parser.add_argument("--skip", type=int, default=1024, help="Samples to skip")
     parser.add_argument("--adcrng", type=float, default=100.0, help="ADC voltage range")
-    parser.add_argument("--adcres", type=int, default=32, help="ADC resolution")
     parser.add_argument("--vrange", type=float, default=40.0, help="Display voltage range in V")
     parser.add_argument("--frange", type=float, default=70000.0, help="Displayed frequency range in Hz")
     parser.add_argument("--trange", type=float, default=100.0, help="Displayed time range in ms")
@@ -1197,7 +1075,6 @@ def main() -> int:
     args = parser.parse_args()
 
     chunk = nearest_fft_size(args.chunk)
-    adc = get_adc_format(args.adcres)
 
     cfg = AudioConfig(
         sample_rate=args.freq,
@@ -1207,7 +1084,6 @@ def main() -> int:
         channel_select=args.chsel,
         channel_count=args.chnum,
         adc_range=args.adcrng,
-        adc_resolution=args.adcres,
         load_ohm=args.rload,
         duration_s=args.duration,
         window_name=args.window,
@@ -1230,16 +1106,9 @@ def main() -> int:
     stream = None
     
     try:
-        audio = pyaudio.PyAudio()
         if args.list:
-            list_sound_devices(audio)
+            list_sound_devices()
             return 0
-        
-        if cfg.device_index >= 0:
-            device_id = get_coreaudio_device_id(audio, cfg.device_index)
-            disable_voice_processing(device_id)
-            disable_safety_offset(device_id)
-            enable_pro_audio_mode(device_id)
 
         window = get_window(cfg.window_name, cfg.chunk)
         init_csv(args.csv)
@@ -1287,14 +1156,16 @@ def main() -> int:
         fft_accum = np.zeros_like(freqs)
         fft_frames = 0
 
-        stream = open_stream(audio, cfg, adc)
-        
+        stream = open_stream(cfg)
+        ring = RingBuffer(8 * (cfg.chunk + cfg.skip), cfg.channel_count) 
         t_start = time.time()
         while (time.time() - t_start < cfg.duration_s) and not closed["value"]:
             if stream is None:
                 meas = simulate_signal(cfg.sim_freq, cfg.sim_noise, ts, cfg.sim_freq2, cfg.sim_amp2, cfg.sim_hmncs, cfg.thd_harmonics)
             else:
-                meas = read_measurement(stream, cfg, adc)
+                meas = read_measurement(stream, cfg, ring)
+                if meas is None:
+                    continue
 
             if len(meas) < 16:
                 raise RuntimeError("Measurement buffer too short.")
@@ -1373,10 +1244,9 @@ def main() -> int:
     finally:
         try:
             if stream is not None:
-                stream.stop_stream()
+                stream.stop()
                 stream.close()
         finally:
-            audio.terminate()
             plt.close("all")
 
 
