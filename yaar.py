@@ -552,19 +552,15 @@ def open_stream(cfg: AudioConfig, ring: RingBuffer):
     if cfg.channel_select >= cfg.channel_count:
         raise ValueError("Invalid channel selection")
 
-#    def callback(indata, frames, time_info, status):
-#        if status:
-#            print(status, file=sys.stderr)
-#        ring.push(indata)   # ZERO COPY write
     def callback(indata, frames, time_info, status):
-        mono = indata[:, 0].copy()   # ← hard select LEFT
-        ring.push(mono.reshape(-1,1))
+        if status:
+            print(status, file=sys.stderr)
+        ring.push(indata)   # ZERO COPY write
 
     stream = sd.InputStream(
         samplerate=cfg.sample_rate,
         device=cfg.device_index,
-#        channels=cfg.channel_count,
-        channels=1,
+        channels=cfg.channel_count,
 #        dtype="float32",
         callback=callback,
         blocksize=0,
