@@ -156,8 +156,8 @@ class RingBuffer:
         self.write = 0
         self.filled = 0
 
-    def push(self, data):
-        n = len(data)
+    def push(self, data: np.ndarray):
+        n = data.shape[0]
 
         if n >= self.size:
             self.buf[:] = data[-self.size:]
@@ -165,29 +165,31 @@ class RingBuffer:
             self.filled = self.size
             return
 
-        end = self.write + n
+        w = self.write
+        end = w + n
 
         if end <= self.size:
-            self.buf[self.write:end] = data
+            self.buf[w:end] = data
         else:
-            k = self.size - self.write
-            self.buf[self.write:] = data[:k]
+            k = self.size - w
+            self.buf[w:] = data[:k]
             self.buf[:end % self.size] = data[k:]
 
         self.write = end % self.size
         self.filled = min(self.size, self.filled + n)
 
-    def get_latest(self, n):
+    def get_latest_view(self, n):
+        """Return two views (v1, v2) — zero-copy"""
         if self.filled < n:
-            return None
+            return None, None
 
         start = (self.write - n) % self.size
 
         if start + n <= self.size:
-            return self.buf[start:start+n]
+            return self.buf[start:start+n], None
         else:
             k = self.size - start
-            return np.vstack((self.buf[start:], self.buf[:n-k]))
+            return self.buf[start:], self.buf[:n-k]
 
 def list_sound_devices() -> None:
     devices = sd.query_devices()
@@ -534,7 +536,7 @@ def get_window(name: str, chunk: int) -> np.ndarray:
     raise ValueError(f"Unsupported window: {name}")
 
 
-def open_stream(cfg: AudioConfig):
+def open_stream(cfg: AudioConfig, ring: RingBuffer):
     if cfg.device_index < 0:
         return None
 
@@ -550,31 +552,49 @@ def open_stream(cfg: AudioConfig):
     if cfg.channel_select >= cfg.channel_count:
         raise ValueError("Invalid channel selection")
 
+#    def callback(indata, frames, time_info, status):
+#        if status:
+#            print(status, file=sys.stderr)
+#        ring.push(indata)   # ZERO COPY write
+    def callback(indata, frames, time_info, status):
+        mono = indata[:, 0].copy()   # ← hard select LEFT
+        ring.push(mono.reshape(-1,1))
+
     stream = sd.InputStream(
         samplerate=cfg.sample_rate,
         device=cfg.device_index,
-        channels=cfg.channel_count,
-        dtype="float32",
+#        channels=cfg.channel_count,
+        channels=1,
+#        dtype="float32",
+        callback=callback,
         blocksize=0,
-        latency="low"
+        latency="low",
     )
 
     stream.start()
     return stream
 
 
-def read_measurement(stream, cfg: AudioConfig, ring: RingBuffer):
+def read_measurement(cfg: AudioConfig, ring: RingBuffer):
 
-    data, _ = stream.read(4096)
+    needed = cfg.chunk + cfg.skip
 
-    ring.push(data)
-
-    block = ring.get_latest(cfg.chunk + cfg.skip)
-    if block is None:
+    v1, v2 = ring.get_latest_view(needed)
+    if v1 is None:
         return None
 
-    block = block[cfg.skip:, :]
-    return block[:, cfg.channel_select] * cfg.adc_range
+    # --- ZERO COPY FAST PATH (most of the time) ---
+    if v2 is None:
+        return v1[cfg.skip:, cfg.channel_select] * cfg.adc_range
+
+    # --- WRAP CASE (rare, 1 alloc) ---
+    tmp = np.empty((needed, ring.channels), dtype=np.float32)
+
+    k = v1.shape[0]
+    tmp[:k] = v1
+    tmp[k:] = v2
+
+    return tmp[cfg.skip:, cfg.channel_select] * cfg.adc_range
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -585,11 +605,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument("--list", action="store_true")
-    parser.add_argument("--freq", type=int, default=192000, help="Sample rate")
+    parser.add_argument("--freq", type=int, default=96000, help="Sample rate")
     parser.add_argument("--dev", type=int, default=4, help="ID of sound device")
     parser.add_argument("--chsel", type=int, default=0, help="Selected channel (0-based)")
     parser.add_argument("--chnum", type=int, default=2, help="Number of channels")
-    parser.add_argument("--chunk", type=int, default=32768, help="FFT size")
+    parser.add_argument("--chunk", type=int, default=65536, help="FFT size")
     parser.add_argument("--skip", type=int, default=1024, help="Samples to skip")
     parser.add_argument("--adcrng", type=float, default=100.0, help="ADC voltage range")
     parser.add_argument("--vrange", type=float, default=40.0, help="Display voltage range in V")
@@ -725,7 +745,7 @@ def render_status(skip2, tones, metrics,
     ref_line = f"{'REF':<6}"
     for bf in best_freqs:
         mark = "*" if abs(tones.tone1_freq - bf) < 1e-6 else " "
-        ref_line += f"{bf:>10.2f} Hz{mark}  "
+        ref_line += f"{bf:>8.2f} Hz{mark} "
 
     skip2.text(0.01,0.60,line1,fontfamily="monospace",fontsize=10)
     skip2.text(0.01,0.40,line2,fontfamily="monospace",fontsize=10)
@@ -750,7 +770,7 @@ def best_freq(prime_list: np.ndarray) -> np.ndarray:
     if len(prime_list) == 0:
         return np.array([], dtype=float)
 
-    targets = [60.0, 1000.0, 7000.0, 10000.0, 19000.0, 20000.0]
+    targets = [60.0, 250.0, 1000.0, 7000.0, 8000., 10000.0, 15000.0, 19000.0, 20000.0]
     indices = [int(np.argmin(np.abs(prime_list - t))) for t in targets]
     return prime_list[np.clip(indices, 0, len(prime_list) - 1)]
 
@@ -1156,14 +1176,15 @@ def main() -> int:
         fft_accum = np.zeros_like(freqs)
         fft_frames = 0
 
-        stream = open_stream(cfg)
-        ring = RingBuffer(8 * (cfg.chunk + cfg.skip), cfg.channel_count) 
+        ring = RingBuffer(8 * (cfg.chunk + cfg.skip), cfg.channel_count)
+        stream = open_stream(cfg, ring)
+
         t_start = time.time()
         while (time.time() - t_start < cfg.duration_s) and not closed["value"]:
             if stream is None:
                 meas = simulate_signal(cfg.sim_freq, cfg.sim_noise, ts, cfg.sim_freq2, cfg.sim_amp2, cfg.sim_hmncs, cfg.thd_harmonics)
             else:
-                meas = read_measurement(stream, cfg, ring)
+                meas = read_measurement(cfg, ring)
                 if meas is None:
                     continue
 
