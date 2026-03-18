@@ -478,7 +478,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--chsel", type=int, default=0, help="Selected channel (0-based)")
     parser.add_argument("--chnum", type=int, default=2, help="Number of channels")
     parser.add_argument("--chunk", type=int, default=65536, help="FFT size")
-    parser.add_argument("--skip", type=int, default=1024, help="Samples to skip")
     parser.add_argument("--adcrng", type=float, default=100.0, help="ADC voltage range")
     parser.add_argument("--vrange", type=float, default=40.0, help="Display voltage range in V")
     parser.add_argument("--frange", type=float, default=70000.0, help="Displayed frequency range in Hz")
@@ -967,7 +966,6 @@ def main() -> int:
     cfg = AudioConfig(
         sample_rate=args.freq,
         chunk=chunk,
-        skip=args.skip,
         device_index=args.dev if args.simfreq <= 0 else -1,
         channel_select=args.chsel,
         channel_count=args.chnum,

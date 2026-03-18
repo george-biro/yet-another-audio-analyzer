@@ -37,7 +37,6 @@ class MyFreqMeas:
 class AudioConfig:
     sample_rate: int
     chunk: int
-    skip: int
     device_index: int
     channel_select: int
     channel_count: int
