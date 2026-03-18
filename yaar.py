@@ -563,7 +563,7 @@ def compute_fft(meas: np.ndarray, window: np.ndarray, fmask: np.ndarray) -> np.n
     return apply_freq_mask(fft_magnitude(meas, window), fmask)
 
 def plot_time(ax_time, ts, meas, time_range, voltage_range, formatter_s, formatter_v):
-    # ax_time.cla()
+    ax_time.cla()
     ax_time.set_title("Time Domain", loc="left")
     ax_time.set_xlim(time_range)
     ax_time.set_ylim(voltage_range)
@@ -575,7 +575,7 @@ def plot_time(ax_time, ts, meas, time_range, voltage_range, formatter_s, formatt
 def plot_freq(ax_freq, freqs, mag, wc, i_lo, i_hi,
               freq_range, db_range, formatter_hz, formatter_db):
 
-    # ax_freq.cla()
+    ax_freq.cla()
     ax_freq.set_title("Frequency Domain", loc="left")
     ax_freq.set_xscale("log")
     ax_freq.set_xlim(freq_range)
@@ -601,7 +601,7 @@ def render_status(skip2, tones, metrics,
                   vpp, vrms, prms,
                   cfg, best_freqs):
 
-    # skip2.cla()
+    skip2.cla()
     skip2.axis("off")
 
     if tones.imd_mode:
@@ -1048,7 +1048,6 @@ def main() -> int:
         fig.suptitle("Yet Another Audio analyzeR")
         skip0.axis("off")
         skip1.axis("off")
-        skip2.cla()
         skip2.axis("off")
 
         formatter_s = EngFormatter(unit="s")
