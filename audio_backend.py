@@ -1,10 +1,37 @@
-# --- audio_backend.py (or inline in your file) ---
+#! /usr/bin/env python3
+#
+# Yet Another Audio analyzeR
+#
+# Copyright 2026 George Biro
+#
+# GPLv3-or-later
+# 
+# File: audio_backend.py
 
 import numpy as np
 from dataclasses import dataclass
 import sounddevice as sd
 import platform
+import time
 import sys
+
+class MyFreqMeas:
+    def __init__(self, num):
+        self.last = time.time()
+        self.num = num
+        self.count = self.num
+        self.dt = 0
+
+    def update(self):
+        self.count -= 1
+        if self.count > 0:
+            now = time.time()
+            self.dt = (now - self.last) / self.num
+            self.last = now
+            self.count = self.num
+
+    def stat(self):
+        return self.dt
 
 @dataclass
 class AudioConfig:
@@ -29,49 +56,50 @@ class AudioConfig:
     two_tone_rel_db: float
     peak_min_separation_hz: float
 
-
 class RingBuffer:
-    def __init__(self, size, channels):
-        self.buf = np.zeros((size, channels), dtype=np.float32)
-        self.size = size
+    def __init__(self, chunk, channels, depth=3):
+        self.chunk = chunk
         self.channels = channels
-        self.write = 0
-        self.filled = 0
+        self.depth = depth
+
+        # FIFO elements are whole chunks
+        self.buffers = [
+            np.empty((chunk, channels), dtype=np.float32)
+            for _ in range(depth)
+        ]
+
+        self.pos = 0
+        self.head = 0
+        self.tail = 0
+        self.count = 0
+        self.push_stat = MyFreqMeas(4)
+        self.pop_stat = MyFreqMeas(2)
 
     def push(self, data: np.ndarray):
-        n = data.shape[0]
+        self.push_stat.update()
+        n = len(data)
+        m = min(self.chunk - self.pos, n)
+        self.buffers[self.head][self.pos:self.pos+m] = data[:m]
+        self.pos += m
+        if self.pos >= self.chunk:
+            self.pos = 0
+            self.head = (self.head + 1) % self.depth
+            self.count += 1
 
-        if n >= self.size:
-            self.buf[:] = data[-self.size:]
-            self.write = 0
-            self.filled = self.size
-            return
+    def pop(self):
+        if self.head == self.tail:
+            return None
 
-        w = self.write
-        end = w + n
+        rv = self.tail
+        self.tail = (self.tail + 1) % self.depth
+        self.count -= 1
+        if self.count > 3:
+            print("WARNING: sys overload!")
+        self.pop_stat.update()
+        return self.buffers[rv]
 
-        if end <= self.size:
-            self.buf[w:end] = data
-        else:
-            k = self.size - w
-            self.buf[w:] = data[:k]
-            self.buf[:end % self.size] = data[k:]
-
-        self.write = end % self.size
-        self.filled = min(self.size, self.filled + n)
-
-    def get_latest_view(self, n):
-        """Return two views (v1, v2) — zero-copy"""
-        if self.filled < n:
-            return None, None
-
-        start = (self.write - n) % self.size
-
-        if start + n <= self.size:
-            return self.buf[start:start+n], None
-        else:
-            k = self.size - start
-            return self.buf[start:], self.buf[:n-k]
+    def stat(self):
+        return self.push_stat.stat(), self.pop_stat.stat()
 
 def list_sound_devices() -> None:
     devices = sd.query_devices()
@@ -95,20 +123,47 @@ def open_stream(cfg: AudioConfig, ring: RingBuffer):
     if cfg.channel_select >= cfg.channel_count:
         raise ValueError("Invalid channel selection")
 
+    system = platform.system()
+
+    # 🔥 CRITICAL FIX
+    if system == "Linux":
+        if cfg.sample_rate >= 192000:
+            blocksize = 8192
+        elif cfg.sample_rate >= 96000:
+            blocksize = 4096
+        else:
+            blocksize = 1024
+
+        latency = "low"   # keep low, but buffer is larger
+
+    else:
+        # macOS → keep your fast behavior
+        blocksize = 0
+        latency = "low"
+
+    print(f"[INFO] blocksize={blocksize} latency={latency}")
+
     def callback(indata, frames, time_info, status):
-        if status:
-            print(status, file=sys.stderr)
-        ring.push(indata)   # ZERO COPY write
+        ring.push(indata)
 
     stream = sd.InputStream(
         samplerate=cfg.sample_rate,
         device=cfg.device_index,
         channels=cfg.channel_count,
-#        dtype="float32",
         callback=callback,
-        blocksize=0,
-        latency="low",
+        blocksize=blocksize,
+        latency=latency,
+        dtype="float32",
     )
 
     stream.start()
+    cfg.samplerate = stream.samplerate
     return stream
+
+def read_measurement(cfg, ring):
+    
+    data = ring.pop()
+    if data is None:
+        return None
+    
+    return data[:, cfg.channel_select] * cfg.adc_range

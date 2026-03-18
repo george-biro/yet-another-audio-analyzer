@@ -2,10 +2,11 @@
 #
 # Yet Another Audio analyzeR
 #
-# Copyright 2024 George Biro
+# Copyright 2026 George Biro
 #
 # GPLv3-or-later
 #
+# File yaar.py
 
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
-from audio_backend import open_stream, list_sound_devices, AudioConfig, RingBuffer
+from audio_backend import open_stream, read_measurement, list_sound_devices, AudioConfig, RingBuffer
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import EngFormatter
@@ -462,27 +463,6 @@ def get_window(name: str, chunk: int) -> np.ndarray:
     if key in {"rect", "rectangular", "none"}:
         return np.ones(chunk)
     raise ValueError(f"Unsupported window: {name}")
-
-def read_measurement(cfg: AudioConfig, ring: RingBuffer):
-
-    needed = cfg.chunk + cfg.skip
-
-    v1, v2 = ring.get_latest_view(needed)
-    if v1 is None:
-        return None
-
-    # --- ZERO COPY FAST PATH (most of the time) ---
-    if v2 is None:
-        return v1[cfg.skip:, cfg.channel_select] * cfg.adc_range
-
-    # --- WRAP CASE (rare, 1 alloc) ---
-    tmp = np.empty((needed, ring.channels), dtype=np.float32)
-
-    k = v1.shape[0]
-    tmp[:k] = v1
-    tmp[k:] = v2
-
-    return tmp[cfg.skip:, cfg.channel_select] * cfg.adc_range
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1053,20 +1033,21 @@ def main() -> int:
         formatter_hz = EngFormatter(unit="Hz")
         formatter_db = EngFormatter(unit="dB")
 
-        freqs, fmask, i_lo, i_hi, best_freqs = get_fft_params(cfg.chunk, cfg.sample_rate, freq_range)
-
-        ts, time_range = get_ts(cfg.chunk, cfg.sample_rate, args.trange)
 
         prev_carrier_idx = -1
         stable_count = 0
         write_after = 10 
-        AVG_COUNT = 8
-        fft_accum = np.zeros_like(freqs)
-        fft_frames = 0
+        AVG_COUNT = 2
 
-        ring = RingBuffer(8 * (cfg.chunk + cfg.skip), cfg.channel_count)
+        
+        ring = RingBuffer((cfg.chunk), cfg.channel_count)
         stream = open_stream(cfg, ring)
 
+        freqs, fmask, i_lo, i_hi, best_freqs = get_fft_params(cfg.chunk, cfg.sample_rate, freq_range)
+
+        fft_accum = np.zeros_like(freqs)
+        fft_frames = 0
+        ts, time_range = get_ts(cfg.chunk, cfg.sample_rate, args.trange)
         t_start = time.time()
         while (time.time() - t_start < cfg.duration_s) and not closed["value"]:
             if stream is None:
@@ -1075,6 +1056,8 @@ def main() -> int:
                 meas = read_measurement(cfg, ring)
                 if meas is None:
                     continue
+                push_tm, pop_tm = ring.stat()
+                print(f"push {push_tm*1000:.0f}ms pop {pop_tm*1000:.0f}ms")
 
             if len(meas) < 16:
                 raise RuntimeError("Measurement buffer too short.")
