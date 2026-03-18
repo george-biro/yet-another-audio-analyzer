@@ -124,6 +124,44 @@ class Metrics:
     snr_db: float
     enob_bits: float
 
+class RollingFFTAverage:
+    def __init__(self, freq: np.ndarray, window_size: int):
+        """
+        freq: example FFT vector (used for shape + dtype)
+        window_size: number of frames in rolling average
+        """
+        self.size = window_size
+        self.buffer = np.zeros((window_size, *freq.shape), dtype=freq.dtype)
+        self.accum = np.zeros_like(freq)
+        self.idx = 0
+        self.count = 0
+
+    def update(self, mag: np.ndarray) -> np.ndarray:
+        """
+        mag: FFT magnitude (NOT squared)
+        returns: smoothed magnitude (RMS averaged)
+        """
+        # square in-place (power)
+        np.square(mag, out=mag)
+
+        # remove oldest frame
+        self.accum -= self.buffer[self.idx]
+
+        # store new frame
+        self.buffer[self.idx] = mag
+
+        # add new frame
+        self.accum += mag
+
+        # advance circular index
+        self.idx = (self.idx + 1) % self.size
+
+        # warm-up handling
+        if self.count < self.size:
+            self.count += 1
+
+        # RMS average
+        return np.sqrt(self.accum / self.count)
 
 
 def db_rel(k: float) -> float:
@@ -1043,8 +1081,7 @@ def main() -> int:
 
         freqs, fmask, i_lo, i_hi, best_freqs = get_fft_params(cfg.chunk, cfg.sample_rate, freq_range)
 
-        fft_accum = np.zeros_like(freqs)
-        fft_frames = 0
+        fft_avg = RollingFFTAverage(freqs, 8)
         ts, time_range = get_ts(cfg.chunk, cfg.sample_rate, args.trange)
         t_start = time.time()
         while (time.time() - t_start < cfg.duration_s) and not closed["value"]:
@@ -1064,20 +1101,7 @@ def main() -> int:
             # Time-domain metrics
             vpp, ppeak, vrms, prms = time_domain_analyse(meas, cfg.load_ohm)
 
-            mag = compute_fft(meas, window, fmask)
-
-            if AVG_COUNT > 1:
-                np.square(mag, out=mag)
-                np.add(fft_accum, mag, out=fft_accum)
-                fft_frames += 1
-
-                if fft_frames < AVG_COUNT:
-                    continue
-
-                mag = np.sqrt(fft_accum / fft_frames)
-
-                fft_accum[:] = 0
-                fft_frames = 0
+            mag = fft_avg.update(compute_fft(meas, window, fmask))
             
             tones = analyze_tones(mag, freqs, ts, window, fmask, cfg)
 
