@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import ctypes
 import argparse
 import math
 import os
@@ -18,7 +17,6 @@ import random
 import sys
 import time
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
 from audio_backend import open_stream, read_measurement, list_sound_devices, AudioConfig, RingBuffer
 import matplotlib.pyplot as plt
@@ -355,33 +353,6 @@ def wclean(ts: np.ndarray, window: np.ndarray, center_freq: float, floor_level: 
     mag[mag < floor_level] = 0.0
     return mag
 
-def wclean_fast(
-    freqs: np.ndarray,
-    window_fft: np.ndarray,
-    center_freq: float,
-    floor_level: float,
-) -> np.ndarray:
-
-    size = len(window_fft)
-    out = np.zeros(size)
-
-    idx = nearest_index(freqs, center_freq)
-
-    # width of window spectral kernel
-    k = len(window_fft)
-
-    lo = max(0, idx - k//2)
-    hi = min(size, idx + k//2)
-
-    src_lo = k//2 - (idx - lo)
-    src_hi = src_lo + (hi - lo)
-
-    out[lo:hi] = window_fft[src_lo:src_hi]
-
-    out[out < floor_level] = 0.0
-
-    return out
-
 def wclean_cached(
     ts: np.ndarray,
     window: np.ndarray,
@@ -561,88 +532,6 @@ def apply_freq_mask(values: np.ndarray, fmask: np.ndarray) -> np.ndarray:
 
 def compute_fft(meas: np.ndarray, window: np.ndarray, fmask: np.ndarray) -> np.ndarray:
     return apply_freq_mask(fft_magnitude(meas, window), fmask)
-
-def plot_time(ax_time, ts, meas, time_range, voltage_range, formatter_s, formatter_v):
-    ax_time.cla()
-    ax_time.set_title("Time Domain", loc="left")
-    ax_time.set_xlim(time_range)
-    ax_time.set_ylim(voltage_range)
-    ax_time.xaxis.set_major_formatter(formatter_s)
-    ax_time.yaxis.set_major_formatter(formatter_v)
-    ax_time.plot(ts, meas, "r")
-    ax_time.grid()
-
-def plot_freq(ax_freq, freqs, mag, wc, i_lo, i_hi,
-              freq_range, db_range, formatter_hz, formatter_db):
-
-    ax_freq.cla()
-    ax_freq.set_title("Frequency Domain", loc="left")
-    ax_freq.set_xscale("log")
-    ax_freq.set_xlim(freq_range)
-    ax_freq.set_ylim(db_range)
-
-    ax_freq.xaxis.set_major_formatter(formatter_hz)
-    ax_freq.yaxis.set_major_formatter(formatter_db)
-
-    mag_db_full = clean_log(mag)
-    wc_db_full  = clean_log(wc)
-
-    top = mag_db_full[i_lo:i_hi].max()
-
-    mag_db = mag_db_full[i_lo:i_hi] - top
-    wc_db  = wc_db_full[i_lo:i_hi] - top
-
-    ax_freq.plot(freqs[i_lo:i_hi], mag_db, "b-")
-    ax_freq.plot(freqs[i_lo:i_hi], wc_db, "g.", markersize=3)
-
-    ax_freq.grid()
-
-def render_status(skip2, tones, metrics,
-                  vpp, vrms, prms,
-                  cfg, best_freqs):
-
-    skip2.cla()
-    skip2.axis("off")
-
-    if tones.imd_mode:
-        line1 = (
-            f"{'F1':<6}{tones.tone1_freq:>8.2f} Hz   "
-            f"{'F2':<6}{tones.tone2_freq:>8.2f} Hz   "
-            f"{'IMD':<6}{metrics.imd_db:>7.2f} dB ({metrics.imd_pct:6.2f} %)   "
-            f"{'CCIF':<6}{metrics.imd_diff_db:>7.2f} dB ({metrics.imd_diff_pct:6.3f} %)"
-        )
-    else:
-        line1 = (
-            f"{'BASE':<6}{tones.tone1_freq:>8.2f} Hz   "
-            f"{'':<16}    "
-            f"{'THD':<6}{metrics.thd_db:>7.2f} dB ({metrics.thd_pct:6.2f} %)   "
-            f"{'THD+N':<6}{metrics.sinad_db:>7.2f} dB ({metrics.sinad_pct:6.2f} %)"
-        )
-
-    line2 = (
-        f"{'FFT':<6}{cfg.chunk:>8d}      "
-        f"{'SR':<6}{cfg.sample_rate/1000:>8.1f} kHz  "
-        f"{'SNR':<6}{metrics.snr_db:>7.2f} dB              "
-        f"{'ENOB':<6}{metrics.enob_bits:>7.2f} bits"
-    )
-
-    line3 = (
-        f"{'Vpp':<6}{vpp:>8.2f} V    "
-        f"{'Vrms':<6}{vrms:>8.2f} V    "
-        f"{'Prms':<6}{prms:>7.2f} W               "
-        f"{'LOAD':<6}{cfg.load_ohm:>7.1f} Ω"
-    )
-
-
-    ref_line = f"{'REF':<6}"
-    for bf in best_freqs:
-        mark = "*" if abs(tones.tone1_freq - bf) < 1e-6 else " "
-        ref_line += f"{bf:>8.2f} Hz{mark} "
-
-    skip2.text(0.01,0.60,line1,fontfamily="monospace",fontsize=10)
-    skip2.text(0.01,0.40,line2,fontfamily="monospace",fontsize=10)
-    skip2.text(0.01,0.20,line3,fontfamily="monospace",fontsize=10)
-    skip2.text(0.01,0.00,ref_line,fontfamily="monospace",fontsize=8,style="italic")
 
 def time_domain_analyse(meas, load_ohm):
     vpp = float(np.max(meas) - np.min(meas))
@@ -920,67 +809,6 @@ def compute_metrics(mag, freqs, tones, fmask, cfg) -> Metrics:
         enob_bits,
     )
 
-def annotate_peaks(ax, freqs, mag, db_range, tones, cfg):
-
-    mag_db_full = clean_log(mag)
-    if not tones.imd_mode and tones.carrier_idx > 0:
-
-        for i in range(1, 1 + cfg.thd_harmonics):
-
-            idx = tones.carrier_idx * i
-
-            if idx >= len(mag):
-                break
-
-            y = mag[idx]
-            if y <= 1e-10:
-                continue
-
-            y_db = mag_db_full[idx] - mag_db_full.max()
-
-            if y_db <= db_range[0]:
-                continue
-
-            ax.text(
-                freqs[idx],
-                y_db,
-                str(i),
-                horizontalalignment="center",
-                verticalalignment="bottom",
-                color="c",
-                fontstyle="italic",
-            )
-
-    else:
-
-        for tone_freq, label in [
-            (tones.tone1_freq, "F1"),
-            (tones.tone2_freq, "F2"),
-        ]:
-
-            if tone_freq <= 0:
-                continue
-
-            idx = nearest_index(freqs, tone_freq)
-
-            y = mag[idx]
-            if y <= 1e-10:
-                continue
-
-            y_db = mag_db_full[idx] - mag_db_full.max()
-
-            if y_db <= db_range[0]:
-                continue
-
-            ax.text(
-                freqs[idx],
-                y_db,
-                label,
-                horizontalalignment="center",
-                verticalalignment="bottom",
-                color="c",
-                fontstyle="italic",
-            )
 
 def main() -> int:
     parser = build_parser()
@@ -1039,6 +867,50 @@ def main() -> int:
             hspace=0.25
         )
 
+        formatter_s = EngFormatter(unit="s")
+        formatter_v = EngFormatter(unit="V")
+        formatter_hz = EngFormatter(unit="Hz")
+        formatter_db = EngFormatter(unit="dB")
+
+        ring = RingBuffer((cfg.chunk), cfg.channel_count)
+        stream = open_stream(cfg, ring)
+
+        freqs, fmask, i_lo, i_hi, best_freqs = get_fft_params(cfg.chunk, cfg.sample_rate, freq_range)
+
+        fft_avg = RollingFFTAverage(freqs, 4)
+        ts, time_range = get_ts(cfg.chunk, cfg.sample_rate, args.trange)
+        td_step = max(1, len(ts) // 4000)
+
+        # ---- STATIC AXIS SETUP ----
+        ax_time.set_title("Time Domain", loc="left")
+        ax_time.set_xlim(time_range)
+        ax_time.set_ylim(voltage_range)
+        ax_time.xaxis.set_major_formatter(formatter_s)
+        ax_time.yaxis.set_major_formatter(formatter_v)
+        ax_time.grid()
+
+        ax_freq.set_title("Frequency Domain", loc="left")
+        ax_freq.set_xscale("log")
+        ax_freq.set_xlim(freq_range)
+        ax_freq.set_ylim(db_range)
+        ax_freq.xaxis.set_major_formatter(formatter_hz)
+        ax_freq.yaxis.set_major_formatter(formatter_db)
+        ax_freq.grid()
+
+        # ---- PLOT OBJECTS (CREATE ONCE) ----
+        time_line, = ax_time.plot([], [], "r")
+        freq_line, = ax_freq.plot([], [], "b-")
+        wc_line,   = ax_freq.plot([], [], "g.", markersize=3)
+
+        # peak annotations storage
+        peak_texts = []
+
+        # ---- STATUS TEXT (CREATE ONCE) ----
+        status_text1 = skip2.text(0.01, 0.60, "", fontfamily="monospace", fontsize=10)
+        status_text2 = skip2.text(0.01, 0.40, "", fontfamily="monospace", fontsize=10)
+        status_text3 = skip2.text(0.01, 0.20, "", fontfamily="monospace", fontsize=10)
+        status_text4 = skip2.text(0.01, 0.00, "", fontfamily="monospace", fontsize=8, style="italic") 
+
         closed = {"value": False}
 
         def on_close(_event):
@@ -1050,25 +922,11 @@ def main() -> int:
         skip1.axis("off")
         skip2.axis("off")
 
-        formatter_s = EngFormatter(unit="s")
-        formatter_v = EngFormatter(unit="V")
-        formatter_hz = EngFormatter(unit="Hz")
-        formatter_db = EngFormatter(unit="dB")
-
 
         prev_carrier_idx = -1
         stable_count = 0
         write_after = 10 
-        AVG_COUNT = 2
-
-        
-        ring = RingBuffer((cfg.chunk), cfg.channel_count)
-        stream = open_stream(cfg, ring)
-
-        freqs, fmask, i_lo, i_hi, best_freqs = get_fft_params(cfg.chunk, cfg.sample_rate, freq_range)
-
-        fft_avg = RollingFFTAverage(freqs, 8)
-        ts, time_range = get_ts(cfg.chunk, cfg.sample_rate, args.trange)
+ 
         t_start = time.time()
         while (time.time() - t_start < cfg.duration_s) and not closed["value"]:
             if stream is None:
@@ -1078,7 +936,7 @@ def main() -> int:
                 if meas is None:
                     time.sleep(.001)
                     continue
-                push_tm, pop_tm = ring.stat()
+                # push_tm, pop_tm = ring.stat()
                 # print(f"push {push_tm*1000:.0f}ms pop {pop_tm*1000:.0f}ms")
 
             if len(meas) < 16:
@@ -1099,20 +957,126 @@ def main() -> int:
             prev_carrier_idx = tones.carrier_idx
 
             metrics = compute_metrics(mag, freqs, tones, fmask, cfg)
+######
+            # ---- TIME PLOT (DECIMATED) ----
+            time_line.set_data(ts[::td_step], meas[::td_step])
 
-            plot_time(ax_time, ts, meas, time_range, voltage_range, formatter_s, formatter_v)
+            # ---- FFT PLOT ----
+            mag_db_full = clean_log(mag)
+            wc_db_full  = clean_log(tones.wc)
 
-            plot_freq(ax_freq, freqs, mag, tones.wc, i_lo, i_hi,
-                      freq_range, db_range, formatter_hz, formatter_db)
+            top = mag_db_full[i_lo:i_hi].max()
 
-            annotate_peaks(ax_freq, freqs, mag, db_range, tones, cfg)
-                    
-            render_status(skip2, tones, metrics, vpp, vrms, prms,
-                          cfg, best_freqs)
+            freq_line.set_data(
+                freqs[i_lo:i_hi],
+                mag_db_full[i_lo:i_hi] - top
+            )
 
+            wc_line.set_data(
+                freqs[i_lo:i_hi],
+                wc_db_full[i_lo:i_hi] - top
+            )
+
+            # ---- PEAK ANNOTATIONS (reuse) ----
+            for t in peak_texts:
+                t.remove()
+            peak_texts.clear()
+
+            if not tones.imd_mode and tones.carrier_idx > 0:
+                for i in range(1, 1 + cfg.thd_harmonics):
+                    idx = tones.carrier_idx * i
+                    if idx >= len(mag):
+                        break
+
+                    y = mag[idx]
+                    if y <= 1e-10:
+                        continue
+
+                    y_db = mag_db_full[idx] - mag_db_full.max()
+                    if y_db <= db_range[0]:
+                        continue
+
+                    txt = ax_freq.text(
+                        freqs[idx],
+                        y_db,
+                        str(i),
+                        ha="center",
+                        va="bottom",
+                        color="c",
+                        fontstyle="italic",
+                    )
+                    peak_texts.append(txt)
+
+            else:
+                for tone_freq, label in [
+                    (tones.tone1_freq, "F1"),
+                    (tones.tone2_freq, "F2"),
+                ]:
+                    if tone_freq <= 0:
+                        continue
+
+                    idx = nearest_index(freqs, tone_freq)
+                    y = mag[idx]
+                    if y <= 1e-10:
+                        continue
+
+                    y_db = mag_db_full[idx] - mag_db_full.max()
+                    if y_db <= db_range[0]:
+                        continue
+
+                    txt = ax_freq.text(
+                        freqs[idx],
+                        y_db,
+                        label,
+                        ha="center",
+                        va="bottom",
+                        color="c",
+                        fontstyle="italic",
+                    )
+                    peak_texts.append(txt)
+
+            # ---- STATUS TEXT UPDATE ----
+            if tones.imd_mode:
+                line1 = (
+                    f"{'F1':<6}{tones.tone1_freq:>8.2f} Hz   "
+                    f"{'F2':<6}{tones.tone2_freq:>8.2f} Hz   "
+                    f"{'IMD':<6}{metrics.imd_db:>7.2f} dB ({metrics.imd_pct:6.2f} %)   "
+                    f"{'CCIF':<6}{metrics.imd_diff_db:>7.2f} dB ({metrics.imd_diff_pct:6.3f} %)"
+                )
+            else:
+                line1 = (
+                    f"{'BASE':<6}{tones.tone1_freq:>8.2f} Hz   "
+                    f"{'':<16}    "
+                    f"{'THD':<6}{metrics.thd_db:>7.2f} dB ({metrics.thd_pct:6.2f} %)   "
+                    f"{'THD+N':<6}{metrics.sinad_db:>7.2f} dB ({metrics.sinad_pct:6.2f} %)"
+                )
+
+            line2 = (
+                f"{'FFT':<6}{cfg.chunk:>8d}      "
+                f"{'SR':<6}{cfg.sample_rate/1000:>8.1f} kHz  "
+                f"{'SNR':<6}{metrics.snr_db:>7.2f} dB              "
+                f"{'ENOB':<6}{metrics.enob_bits:>7.2f} bits"
+            )
+
+            line3 = (
+                f"{'Vpp':<6}{vpp:>8.2f} V    "
+                f"{'Vrms':<6}{vrms:>8.2f} V    "
+                f"{'Prms':<6}{prms:>7.2f} W               "
+                f"{'LOAD':<6}{cfg.load_ohm:>7.1f} Ω"
+            )
+
+            ref_line = f"{'REF':<6}"
+            for bf in best_freqs:
+                mark = "*" if abs(tones.tone1_freq - bf) < 1e-6 else " "
+                ref_line += f"{bf:>8.2f} Hz{mark} "
+
+            status_text1.set_text(line1)
+            status_text2.set_text(line2)
+            status_text3.set_text(line3)
+            status_text4.set_text(ref_line)
+#####
             fig.canvas.draw_idle()
             fig.canvas.flush_events()
-            time.sleep(0.01)
 
             if stable_count == write_after and pic_base:
                 plt.savefig(
