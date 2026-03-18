@@ -137,30 +137,17 @@ class RollingFFTAverage:
         self.count = 0
 
     def update(self, mag: np.ndarray) -> np.ndarray:
-        """
-        mag: FFT magnitude (NOT squared)
-        returns: smoothed magnitude (RMS averaged)
-        """
-        # square in-place (power)
-        np.square(mag, out=mag)
+        mag2 = mag * mag   # ← do NOT modify input
 
-        # remove oldest frame
         self.accum -= self.buffer[self.idx]
+        self.buffer[self.idx] = mag2
+        self.accum += mag2
 
-        # store new frame
-        self.buffer[self.idx] = mag
-
-        # add new frame
-        self.accum += mag
-
-        # advance circular index
         self.idx = (self.idx + 1) % self.size
 
-        # warm-up handling
         if self.count < self.size:
             self.count += 1
 
-        # RMS average
         return np.sqrt(self.accum / self.count)
 
 
@@ -511,7 +498,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument("--list", action="store_true")
-    parser.add_argument("--freq", type=int, default=96000, help="Sample rate")
+    parser.add_argument("--freq", type=int, default=192000, help="Sample rate")
     parser.add_argument("--dev", type=int, default=4, help="ID of sound device")
     parser.add_argument("--chsel", type=int, default=0, help="Selected channel (0-based)")
     parser.add_argument("--chnum", type=int, default=2, help="Number of channels")
@@ -576,7 +563,7 @@ def compute_fft(meas: np.ndarray, window: np.ndarray, fmask: np.ndarray) -> np.n
     return apply_freq_mask(fft_magnitude(meas, window), fmask)
 
 def plot_time(ax_time, ts, meas, time_range, voltage_range, formatter_s, formatter_v):
-    ax_time.cla()
+    # ax_time.cla()
     ax_time.set_title("Time Domain", loc="left")
     ax_time.set_xlim(time_range)
     ax_time.set_ylim(voltage_range)
@@ -588,7 +575,7 @@ def plot_time(ax_time, ts, meas, time_range, voltage_range, formatter_s, formatt
 def plot_freq(ax_freq, freqs, mag, wc, i_lo, i_hi,
               freq_range, db_range, formatter_hz, formatter_db):
 
-    ax_freq.cla()
+    # ax_freq.cla()
     ax_freq.set_title("Frequency Domain", loc="left")
     ax_freq.set_xscale("log")
     ax_freq.set_xlim(freq_range)
@@ -614,7 +601,7 @@ def render_status(skip2, tones, metrics,
                   vpp, vrms, prms,
                   cfg, best_freqs):
 
-    skip2.cla()
+    # skip2.cla()
     skip2.axis("off")
 
     if tones.imd_mode:
@@ -1090,9 +1077,10 @@ def main() -> int:
             else:
                 meas = read_measurement(cfg, ring)
                 if meas is None:
+                    time.sleep(.001)
                     continue
                 push_tm, pop_tm = ring.stat()
-                print(f"push {push_tm*1000:.0f}ms pop {pop_tm*1000:.0f}ms")
+                # print(f"push {push_tm*1000:.0f}ms pop {pop_tm*1000:.0f}ms")
 
             if len(meas) < 16:
                 raise RuntimeError("Measurement buffer too short.")

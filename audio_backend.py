@@ -24,7 +24,7 @@ class MyFreqMeas:
 
     def update(self):
         self.count -= 1
-        if self.count > 0:
+        if self.count <= 0:
             now = time.time()
             self.dt = (now - self.last) / self.num
             self.last = now
@@ -56,7 +56,7 @@ class AudioConfig:
     peak_min_separation_hz: float
 
 class RingBuffer:
-    def __init__(self, chunk, channels, depth=3):
+    def __init__(self, chunk, channels, depth=8):
         self.chunk = chunk
         self.channels = channels
         self.depth = depth
@@ -73,6 +73,9 @@ class RingBuffer:
         self.count = 0
         self.push_stat = MyFreqMeas(4)
         self.pop_stat = MyFreqMeas(2)
+
+    def drop(self):
+        self.pos = 0
 
     def push(self, data: np.ndarray):
         self.push_stat.update()
@@ -143,17 +146,24 @@ def open_stream(cfg: AudioConfig, ring: RingBuffer):
     print(f"[INFO] blocksize={blocksize} latency={latency}")
 
     def callback(indata, frames, time_info, status):
+        if status:
+            print("AUDIO ERROR:", status, "frames:", frames)
+            ring.drop()
+
         ring.push(indata)
+
 
     stream = sd.InputStream(
         samplerate=cfg.sample_rate,
-        device=cfg.device_index,
+        device="hw:1,0",
         channels=cfg.channel_count,
         callback=callback,
         blocksize=blocksize,
         latency=latency,
         dtype="float32",
     )
+    
+    print(sd.query_devices("hw:1,0"))
 
     stream.start()
     cfg.samplerate = stream.samplerate
@@ -164,5 +174,12 @@ def read_measurement(cfg, ring):
     data = ring.pop()
     if data is None:
         return None
-    
+   
+#    left = data[:, 0]
+#    right = data[:, 1]
+#    print(
+#        "L rms:", np.sqrt(np.mean(left**2)),
+#        "R rms:", np.sqrt(np.mean(right**2))
+#    )
+
     return data[:, cfg.channel_select] * cfg.adc_range
