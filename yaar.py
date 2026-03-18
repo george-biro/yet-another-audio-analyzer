@@ -8,8 +8,6 @@
 #
 # File yaar.py
 
-from __future__ import annotations
-
 import argparse
 import math
 import os
@@ -979,7 +977,7 @@ def main() -> int:
 
             # ---- PEAK ANNOTATIONS (reuse) ----
             for t in peak_texts:
-                t.remove()
+               t.remove()
             peak_texts.clear()
 
             if not tones.imd_mode and tones.carrier_idx > 0:
