@@ -155,15 +155,13 @@ def open_stream(cfg: AudioConfig, ring: RingBuffer):
 
     stream = sd.InputStream(
         samplerate=cfg.sample_rate,
-        device="hw:1,0",
+        device=cfg.device_index,
         channels=cfg.channel_count,
         callback=callback,
         blocksize=blocksize,
         latency=latency,
         dtype="float32",
     )
-    
-    print(sd.query_devices("hw:1,0"))
 
     stream.start()
     cfg.samplerate = stream.samplerate
