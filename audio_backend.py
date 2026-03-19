@@ -71,14 +71,13 @@ class RingBuffer:
         self.head = 0
         self.tail = 0
         self.count = 0
-        self.push_stat = MyFreqMeas(4)
-        self.pop_stat = MyFreqMeas(2)
+        self.overflow = 0
 
     def drop(self):
+        self.overflow += 1
         self.pos = 0
 
     def push(self, data: np.ndarray):
-        self.push_stat.update()
         n = len(data)
         m = min(self.chunk - self.pos, n)
         self.buffers[self.head][self.pos:self.pos+m] = data[:m]
@@ -97,11 +96,10 @@ class RingBuffer:
         self.count -= 1
         if self.count > 3:
             print("WARNING: sys overload!")
-        self.pop_stat.update()
         return self.buffers[rv]
 
     def stat(self):
-        return self.push_stat.stat(), self.pop_stat.stat()
+        return self.overflow
 
 def list_sound_devices() -> None:
     devices = sd.query_devices()
@@ -147,10 +145,10 @@ def open_stream(cfg: AudioConfig, ring: RingBuffer):
 
     def callback(indata, frames, time_info, status):
         if status:
-            print("AUDIO ERROR:", status, "frames:", frames)
+#            print("AUDIO ERROR:", status, "frames:", frames)
             ring.drop()
-
-        ring.push(indata)
+        else:
+            ring.push(indata)
 
 
     stream = sd.InputStream(
