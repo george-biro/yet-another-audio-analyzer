@@ -7,6 +7,8 @@
 # GPLv3-or-later
 #
 # File yaar.py
+#
+# MAC -> midi.app -> select E1DA -> set primary to zero
 
 import argparse
 import math
@@ -469,7 +471,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--freq", type=int, default=192000, help="Sample rate")
     parser.add_argument("--dev", type=int, default=4, help="ID of sound device")
-    parser.add_argument("--chsel", type=int, default=0, help="Selected channel (0-based)")
+    parser.add_argument("--chsel", type=int, default=1, help="Selected channel (0-based)")
     parser.add_argument("--chnum", type=int, default=2, help="Number of channels")
     parser.add_argument("--chunk", type=int, default=65536, help="FFT size")
     parser.add_argument("--adcrng", type=float, default=100.0, help="ADC voltage range")

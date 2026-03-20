@@ -137,9 +137,14 @@ def open_stream(cfg: AudioConfig, ring: RingBuffer):
         latency = "low"   # keep low, but buffer is larger
 
     else:
-        # macOS → keep your fast behavior
-        blocksize = 0
-        latency = "low"
+        if cfg.sample_rate >= 192000:
+            blocksize = 8192
+        elif cfg.sample_rate >= 96000:
+            blocksize = 4096
+        else:
+            blocksize = 2048
+
+        latency = 0.05
 
     print(f"[INFO] blocksize={blocksize} latency={latency}")
 
@@ -150,7 +155,6 @@ def open_stream(cfg: AudioConfig, ring: RingBuffer):
         else:
             ring.push(indata)
 
-
     stream = sd.InputStream(
         samplerate=cfg.sample_rate,
         device=cfg.device_index,
@@ -159,6 +163,8 @@ def open_stream(cfg: AudioConfig, ring: RingBuffer):
         blocksize=blocksize,
         latency=latency,
         dtype="float32",
+        clip_off=True,
+        dither_off=True,
     )
 
     stream.start()
