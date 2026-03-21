@@ -227,50 +227,34 @@ class WRef:
 def rms(values: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.square(values))))
 
-def thd_ieee(mag, tones_mask, harmonics_mask):
-    # fundamental (same as before)
-    vfund = np.sum(np.square(mag * tones_mask))
+def thd(vfund, vdist):
     if vfund <= EPS:
         return float("nan"), float("nan")
 
-    vharm = np.sum(np.square(mag * harmonics_mask))
-    k = math.sqrt(vharm / vfund)
+    k = math.sqrt(vdist / vfund)
     return db_rel(k), 100.0 * k
 
-def thdn(mag,
-                    wc,
-                    tones_mask
-):
-    vfund = np.sum(np.square(mag * tones_mask))
+def thdn(vfund, vdist, vnoise):
     if vfund <= EPS:
         return float("nan"), float("nan")
-    
-    thdn_mask = 1.0 - tones_mask
-    vnoise = np.sum(np.square(mag * thdn_mask))
 
-    k = math.sqrt(vnoise / vfund)
+    k = math.sqrt((vdist + vnoise) / vfund)
     return db_rel(k), 100.0 * k
 
-def snr(
-    mag,
-    wc,
-    tones_mask,
-    harmonics_mask
-) -> float:
-    vfund = np.sum(np.square(mag * tones_mask))
-    signal_related = np.clip(tones_mask + harmonics_mask, 0.0, 1.0)
-    noise_mask = 1.0 - signal_related
-    vnoise = np.sum(np.square(mag * noise_mask))
+def sinad(vfund, vdist, vnoise):
+    if (vdist + vnoise) <= EPS:
+        return float("nan")
 
-    if vnoise < 1e-100:
+    return db_rel(math.sqrt(vfund / (vdist + vnoise)))
+
+def snr(vfund, vnoise):
+    if vnoise <= EPS:
         return float("nan")
 
     return db_rel(math.sqrt(vfund / vnoise))
 
-
-def enob(sinad_db: float) -> float:
+def enob(sinad_db):
     return (sinad_db - 1.76) / 6.02
-
 
 def nearest_index(arr: np.ndarray, value: float) -> int:
     return np.argmin(np.abs(arr - value))
@@ -492,7 +476,7 @@ def build_two_tone_masks(
 
     tmp = np.zeros_like(wc)
     for idx in imd_idx:
-        if idx < len(wc):
+        if 0 <= idx < len(wc):
             tmp += wref.shift_kernel(idx)
 
     tpeak = np.max(tmp)
@@ -502,6 +486,13 @@ def build_two_tone_masks(
     hrmncs_mask = notch(tmp, cfg.flt_threshold)
     return wc, tones_mask, hrmncs_mask, freq1, freq2
 
+def compute_powers(mag, tones_mask, harmonics_mask):
+    vfund = np.sum((mag * tones_mask) ** 2)
+    vdist = np.sum((mag * harmonics_mask) ** 2)
+    noise_mask = 1.0 - np.clip(tones_mask + harmonics_mask, 0.0, 1.0)
+    vnoise = np.sum((mag * noise_mask) ** 2)
+    vtotal = vfund + vdist + vnoise
+    return vfund, vdist, vnoise, vtotal
 
 def main() -> int:
     parser = build_parser()
@@ -663,22 +654,7 @@ def main() -> int:
                 ) = build_two_tone_masks(
                     mag, freqs, idx1, idx2, wref, cfg
                 )
-                
-                imd_db, imd_pct = thd_ieee(
-                    mag,
-                    tones_mask,
-                    harmonics_mask
-                )
-    
-                imdn_db, imdn_pct = thdn(
-                    mag,
-                    wc,
-                    tones_mask
-                )
-
-                sinad_db = sinad_pct = thd_db = thd_pct = 'N/A'
-                
-            else:
+            else: 
                 (
                     wc,
                     tones_mask,
@@ -689,26 +665,37 @@ def main() -> int:
                 )
                 tone2_freq = 0
 
-                thd_db, thd_pct = thd_ieee(
-                    mag,
-                    tones_mask,
-                    harmonics_mask
+            vfund, vdist, vnoise, vtotal = compute_powers(mag, tones_mask, harmonics_mask)       
+            imd_db, imd_pct = thd(
+                vfund,
+                vdist
+            )
+    
+            imdn_db, imdn_pct = thdn(
+                vfund,
+                vdist,
+                vnoise
                 )
 
-                sinad_db, sinad_pct = thdn(
-                    mag,
-                    wc,
-                    tones_mask
-                )
+            sinad_db = sinad_pct = sinad(
+                vfund, vdist, vnoise)
                 
-                imdn_db = imdn_pct = imd_db = imd_pct = 'N/A'
-                 
-            snr_db = snr(
-                mag,
-                wc,
-                tones_mask,
-                harmonics_mask
+            thd_db, thd_pct = thd(
+                    vfund,
+                    vdist
+                )
+
+            thdn_db, thdn_pct = thdn(
+                vfund,
+                vdist,
+                vnoise
             )
+                
+            snr_db = snr(
+                vfund,
+                vnoise
+            )
+            
             enob_bits = enob(snr_db)
 
             # ---- TIME PLOT (DECIMATED) ----
@@ -801,7 +788,7 @@ def main() -> int:
                     f"{'BASE':<6}{tone1_freq:>8.2f} Hz   "
                     f"{'':<16}    "
                     f"{'THD':<6}{thd_db:>7.2f} dB ({thd_pct:6.2f} %)   "
-                    f"{'THD+N':<6}{sinad_db:>7.2f} dB ({sinad_pct:6.2f} %)"
+                    f"{'THD+N':<6}{thdn_db:>7.2f} dB ({thdn_pct:6.2f} %)"
                 )
 
             line2 = (
@@ -848,9 +835,8 @@ def main() -> int:
                 with open(args.csv, "a", encoding="utf-8") as f:
                     f.write(
                         f"{mode_name},{tone1_freq},{tone2_freq},"
-                        f"{sinad_db},{sinad_pct},"
+                        f"{thdn_db},{thdn_pct},"
                         f"{thd_db},{thd_pct},"
-                        f"{imd_db},{imd_pct},"
                         f"{imd_db},{imd_pct},"
                         f"{imdn_db},{imdn_pct},"
                         f"{snr_db},{enob_bits},"
