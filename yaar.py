@@ -129,16 +129,6 @@ def db_rel(k: float) -> float:
 def from_db(db: float) -> float:
     return 10.0 ** (db / 20.0)
 
-
-def build_peak_mask(freqs: np.ndarray, center_freq: float, half_width_hz: float) -> np.ndarray:
-    mask = np.zeros(len(freqs), dtype=float)
-    if center_freq <= 0:
-        return mask
-    lo = center_freq - half_width_hz
-    hi = center_freq + half_width_hz
-    mask[(freqs >= lo) & (freqs <= hi)] = 1.0
-    return mask
-
 def find_top_two_peaks(
     wm: np.ndarray,
     freqs: np.ndarray,
@@ -191,153 +181,48 @@ def find_top_two_peaks(
 
     return sorted(filtered, key=lambda i: freqs[i])
 
-def refine_peak_freq_centroid(
-    wm: np.ndarray,
-    freqs: np.ndarray,
-    idx: int,
-    rel_level: float = 0.25,
-    radius: int = 3,
-) -> float:
-    lo = max(idx - radius, 0)
-    hi = min(idx + radius + 1, len(wm))
 
-    local_mag = wm[lo:hi]
-    local_freq = freqs[lo:hi]
-
-    peak = wm[idx]
-    if peak <= 0:
-        return freqs[idx]
-
-    mask = local_mag >= peak * rel_level
-    if not np.any(mask):
-        return freqs[idx]
-
-    weights = local_mag[mask] ** 2
-    denom = np.sum(weights)
-    if denom <= 1e-20:
-        return freqs[idx]
-
-    return float(np.sum(local_freq[mask] * weights) / denom)
-
-def calc_peak_freq(wm, freqs, idx, _rel):
-
-    if idx <= 0 or idx >= len(wm) - 1:
-        return freqs[idx]
-
-    a = wm[idx - 1]
-    b = wm[idx]
-    c = wm[idx + 1]
-
-    denom = a - 2 * b + c
-    if abs(denom) < 1e-20:
-        return freqs[idx]
-
-    delta = 0.5 * (a - c) / denom
-
-    bin_width = freqs[1] - freqs[0]
-
-    return freqs[idx] + delta * bin_width
-
-def calc_peak_freq_stable(
-    wm: np.ndarray,
-    freqs: np.ndarray,
-    idx: int,
-    center_freq_threshold: float,
-) -> float:
-    parabolic = calc_peak_freq(wm, freqs, idx, 0.0)
-    centroid = refine_peak_freq_centroid(wm, freqs, idx)
-
-    if abs(parabolic - centroid) <= center_freq_threshold:
-        return 0.5 * (parabolic + centroid)
-
-    return parabolic
-
-def imd_total(
-    wm: np.ndarray,
-    mfund1: np.ndarray,
-    mfund2: np.ndarray,
-    fmask: np.ndarray,
-) -> tuple[float, float]:
-
-    msig = np.clip(mfund1 + mfund2, 0.0, 1.0)
-
-    # fundamental power using full window kernel
-    vsig = np.sum((wm * msig) ** 2)
-
-    # distortion = everything except fundamentals
-    mnoise = np.clip(fmask - msig, 0.0, 1.0)
-    vdist = np.sum((wm * mnoise) ** 2)
-
-    if vsig < 1e-100:
-        return float("nan"), float("nan")
-
-    k = math.sqrt(vdist / vsig)
-
-    return db_rel(k), 100.0 * k
-
-def imd_ccif_difference(
-    wm: np.ndarray,
-    freqs: np.ndarray,
-    f1: float,
-    f2: float,
-    half_width_hz: float,
-) -> tuple[float, float, float]:
-    """
-    For CCIF-like two-tone tests, report the difference product |f2-f1|.
-    Returns: product frequency, level relative to RMS of the two tones, percent
-    """
-    fd = abs(f2 - f1)
-    if fd <= 0:
-        return float("nan"), float("nan"), float("nan")
-
-    diff_mask = build_peak_mask(freqs, fd, half_width_hz)
-    vdiff = np.sum(np.square(wm * diff_mask))
-
-    m1 = build_peak_mask(freqs, f1, half_width_hz)
-    m2 = build_peak_mask(freqs, f2, half_width_hz)
-    vref = np.sum(np.square(wm * (m1 + m2)))
-
-    if vref < 1e-100:
-        return fd, float("nan"), float("nan")
-
-    k = math.sqrt(vdiff / vref)
-    return fd, db_rel(k), 100.0 * k
-
-def normalize_unit(values: np.ndarray) -> np.ndarray:
-    vmax = np.max(values)
-    if vmax > 1e-6:
-        return values / vmax
-    return values.copy()
 
 
 def clean_log(values: np.ndarray, floor: float = 1e-20) -> np.ndarray:
     clipped = np.maximum(values, floor)
     return 20.0 * np.log10(clipped)
 
-WCLEAN_CACHE: dict[int, np.ndarray] = {}
 
-def wclean(ts: np.ndarray, window: np.ndarray, center_freq: float) -> np.ndarray:
-    clean = np.sin(2.0 * np.pi * center_freq * ts) * window
-    spectrum = np.fft.rfft(clean)
-    mag = normalize_unit(np.abs(spectrum) / len(ts))
-    return mag
 
-def wclean_cached(
-    ts: np.ndarray,
-    window: np.ndarray,
-    center_freq: float,
-) -> np.ndarray:
+class WRef:
+    @staticmethod
+    def normalize_unit(values: np.ndarray) -> np.ndarray:
+        vmax = np.max(values)
+        if vmax > 1e-6:
+            return values / vmax
+        return values.copy()
 
-    key = int(center_freq * 1000)
+    @staticmethod
+    def wclean(ts: np.ndarray, window: np.ndarray, center_freq: float) -> np.ndarray:
+        clean = np.sin(2.0 * np.pi * center_freq * ts) * window
+        spectrum = np.fft.rfft(clean)
+        mag = WRef.normalize_unit(np.abs(spectrum) / len(ts))
+        return mag
 
-    cached = WCLEAN_CACHE.get(key)
-    if cached is not None:
-        wc = cached.copy()
-    else:
-        wc = wclean(ts, window, center_freq)
-        WCLEAN_CACHE[key] = wc.copy()
+    def __init__(self, ts: np.ndarray, window: np.ndarray, freqs: np.ndarray):
+        self.ref_idx = len(freqs) // 2
+        ref_freq = freqs[self.ref_idx]
+        self.ref = self.wclean(ts, window, ref_freq)
 
-    return wc
+    def shift_kernel(self, target_idx: int) -> np.ndarray:
+        out = np.zeros_like(self.ref)
+        delta = target_idx - self.ref_idx
+
+        src_lo = max(0, -delta)
+        src_hi = min(len(self.ref), len(self.ref) - delta)
+        dst_lo = max(0, delta)
+        dst_hi = min(len(self.ref), len(self.ref) + delta)
+
+        if src_hi > src_lo and dst_hi > dst_lo:
+            out[dst_lo:dst_hi] = self.ref[src_lo:src_hi]
+
+        return out
 
 def rms(values: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.square(values))))
@@ -494,11 +379,8 @@ def fft_magnitude(meas: np.ndarray, window: np.ndarray) -> np.ndarray:
     mag /= math.sqrt(enbw)
     return mag
 
-def apply_freq_mask(values: np.ndarray, fmask: np.ndarray) -> np.ndarray:
-    return values * fmask
-
 def compute_fft(meas: np.ndarray, window: np.ndarray, fmask: np.ndarray) -> np.ndarray:
-    return apply_freq_mask(fft_magnitude(meas, window), fmask)
+    return fft_magnitude(meas, window) * fmask
 
 def time_domain_analyse(meas, load_ohm):
     vpp = float(np.max(meas) - np.min(meas))
@@ -548,53 +430,46 @@ def notch(values: np.ndarray, level: float) -> np.ndarray:
 def build_single_tone_masks(
     mag: np.ndarray,
     freqs: np.ndarray,
-    ts: np.ndarray,
-    window: np.ndarray,
     carrier_idx: int,
-    fmask: np.ndarray,
+    wref: WRef,
     cfg: AudioConfig,
-): 
+):
     carrier_freq = freqs[carrier_idx]
-    wc = wclean_cached(ts, window, carrier_freq)
-    maskf = notch(wc, cfg.flt_threshold)
+    wc = wref.shift_kernel(carrier_idx)
+
     mpeak = mag[carrier_idx]
     wpeak = np.max(wc)
-    if wpeak > 1e-20:
-        gain = mpeak / wpeak
-    else:
-        gain = 1
-
+    gain = (mpeak / wpeak) if wpeak > 1e-20 else 1.0
     wc *= gain
+    tones_mask = notch(wc, cfg.flt_threshold)
 
-    tmp = np.zeros(len(wc))
+    tmp = np.zeros_like(wc)
     for h in range(2, cfg.thd_harmonics + 1):
-        harmonic_freq = carrier_freq * h
-        tmp += wclean_cached(ts, window, harmonic_freq)
+        harmonic_idx = carrier_idx * h
+        if harmonic_idx >= len(wc):
+            break
+        tmp += wref.shift_kernel(harmonic_idx)
 
     tmp *= gain
-    maskh = notch(tmp, cfg.flt_threshold)
-    #kernel = np.array([0.2, 0.6, 0.2])
-    #kernel = np.array([0.03, 0.07, 0.12, 0.18, 0.2, 0.18, 0.12, 0.07, 0.03])
-    #wc = np.convolve(wc, kernel, mode="same")
-    #wc *= 1.01
-    return wc,maskf,maskh,carrier_freq
+    hrmncs_mask = notch(tmp, cfg.flt_threshold)
+
+    return wc, tones_mask, hrmncs_mask, carrier_freq
 
 def build_two_tone_masks(
     mag: np.ndarray,
     freqs: np.ndarray,
-    ts: np.ndarray,
-    window: np.ndarray,
     idx1: int,
     idx2: int,
-    fmask: np.ndarray,
-    cfg: AudioConfig): 
+    wref: WRef,
+    cfg: AudioConfig,
+):
     freq1 = freqs[idx1]
-    freq2 = freqs[idx2] 
-    wc1 = wclean_cached(ts, window, freq1)
-    wc2 = wclean_cached(ts, window, freq2)
-    
+    freq2 = freqs[idx2]
+
+    wc1 = wref.shift_kernel(idx1)
+    wc2 = wref.shift_kernel(idx2)
+
     mpeak1 = mag[idx1]
-    
     wpeak1 = np.max(wc1)
     if wpeak1 > 1e-20:
         wc1 *= mpeak1 / wpeak1
@@ -603,28 +478,29 @@ def build_two_tone_masks(
     wpeak2 = np.max(wc2)
     if wpeak2 > 1e-20:
         wc2 *= mpeak2 / wpeak2
-    
-    mpeak = max(mpeak1, mpeak2) 
-    wc = wc1 + wc2
-    fmask = notch(wc, cfg.flt_threshold)
-    
-    imd_freqs = [
-        abs(freq1 - freq2),
-        freq1 + freq2,
-        abs(2*freq1 - freq2),
-        abs(2*freq2 - freq1),
-    ]
-    
-    tmp = np.zeros(len(wc))
-    for f in imd_freqs:
-        tmp += wclean_cached(ts, window, f)
+
+    mpeak = max(mpeak1, mpeak2)
+    wc = (wc1 + wc2) 
+    tones_mask = notch(wc, cfg.flt_threshold)
+
+    imd_idx = sorted(set([
+        abs(idx1 - idx2),
+        idx1 + idx2,
+        abs(2 * idx1 - idx2),
+        abs(2 * idx2 - idx1),
+    ]))
+
+    tmp = np.zeros_like(wc)
+    for idx in imd_idx:
+        if idx < len(wc):
+            tmp += wref.shift_kernel(idx)
 
     tpeak = np.max(tmp)
     if tpeak > 1e-20:
         tmp *= mpeak / tpeak
-    
-    hmask = notch(tmp, cfg.flt_threshold)
-    return wc, fmask, hmask, freq1, freq2
+
+    hrmncs_mask = notch(tmp, cfg.flt_threshold)
+    return wc, tones_mask, hrmncs_mask, freq1, freq2
 
 
 def main() -> int:
@@ -693,9 +569,10 @@ def main() -> int:
         stream = open_stream(cfg, ring)
 
         freqs, fmask, i_lo, i_hi, best_freqs = get_fft_params(cfg.chunk, cfg.sample_rate, freq_range)
-
-        fft_avg = RollingFFTAverage(freqs, 4)
         ts, time_range = get_ts(cfg.chunk, cfg.sample_rate, args.trange)
+        wref = WRef(ts, window, freqs)     
+        fft_avg = RollingFFTAverage(freqs, 4)
+        
         td_step = max(1, len(ts) // 4000)
 
         # ---- STATIC AXIS SETUP ----
@@ -784,7 +661,7 @@ def main() -> int:
                     tone1_freq,
                     tone2_freq,
                 ) = build_two_tone_masks(
-                    mag, freqs, ts, window, idx1, idx2, fmask, cfg
+                    mag, freqs, idx1, idx2, wref, cfg
                 )
                 
                 imd_db, imd_pct = thd_ieee(
@@ -808,7 +685,7 @@ def main() -> int:
                     harmonics_mask,
                     tone1_freq
                 ) = build_single_tone_masks(
-                    mag, freqs, ts, window, carrier_idx, fmask, cfg
+                    mag, freqs, carrier_idx, wref, cfg
                 )
                 tone2_freq = 0
 
