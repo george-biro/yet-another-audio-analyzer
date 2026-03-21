@@ -373,7 +373,8 @@ def snr(
     harmonics_mask
 ) -> float:
     vfund = np.sum(np.square(mag * tones_mask))
-    noise_mask = np.maximum((mag > wc).astype(float), harmonics_mask)
+    signal_related = np.clip(tones_mask + harmonics_mask, 0.0, 1.0)
+    noise_mask = 1.0 - signal_related
     vnoise = np.sum(np.square(mag * noise_mask))
 
     if vnoise < 1e-100:
