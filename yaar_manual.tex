@@ -579,6 +579,23 @@ A typical measurement setup uses both tools together:
     \item \texttt{yaar.py} performs spectral analysis and metric extraction
 \end{itemize}
 
+\subsection{Example Measurement Result}
+
+Figure~\ref{fig:test_example} shows a representative measurement obtained using the internal simulation mode with a non-integer tone frequency, added harmonic distortion, and elevated noise floor.
+
+\begin{lstlisting}[style=shellstyle]
+python yaar.py --simfreq 987.3 --simhmncs 0.01 --simnoise -60
+\end{lstlisting}
+
+The resulting spectrum illustrates the detected fundamental, harmonic components, and noise distribution as processed by the FFT-based analysis pipeline.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\columnwidth]{simtest_987Hz_0Hz.png}
+\caption{Example spectrum for simulated input at \SI{987.3}{Hz} with added distortion and noise.}
+\label{fig:test_example}
+\end{figure}
+
 No direct coupling between the programs is required.
 
 \section{Troubleshooting}
