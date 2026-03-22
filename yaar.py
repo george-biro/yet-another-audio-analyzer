@@ -857,8 +857,8 @@ def main() -> int:
                 line1 = (
                     f"{'F1':<6}{tone1_freq:>8.2f} Hz   "
                     f"{'F2':<6}{tone2_freq:>8.2f} Hz   "
-                    f"{'IMD':<6}{imd_db:>7.2f} dB ({imd_pct:6.2f} %)   "
-                    f"{'CCIF':<6}{imdn_db:>7.2f} dB ({imdn_pct:6.3f} %)"
+                    f"{'IMD':<6}{imdn_db:>7.2f} dB ({imdn_pct:6.2f} %)   "
+                    f"{'CCIF':<6}{imd_db:>7.2f} dB ({imd_pct:6.3f} %)"
                 )
             else:
                 line1 = (
