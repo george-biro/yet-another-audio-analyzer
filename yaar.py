@@ -18,7 +18,13 @@ import sys
 import time
 from dataclasses import dataclass
 
-from audio_backend import open_stream, read_measurement, list_sound_devices, AudioConfig, RingBuffer
+from audio_backend import (
+    open_stream,
+    read_measurement,
+    list_sound_devices,
+    AudioConfig,
+    RingBuffer,
+)
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import EngFormatter
@@ -34,16 +40,16 @@ def simulate_signal(
     freq2_hz: float,
     amp2: float,
     hmncs: float,
-    num_hmncs: int
+    num_hmncs: int,
 ) -> np.ndarray:
 
-    phase1 = random.random() * 2*np.pi
-    sig1 = np.sin(2*np.pi*freq_hz*ts + phase1)
+    phase1 = random.random() * 2 * np.pi
+    sig1 = np.sin(2 * np.pi * freq_hz * ts + phase1)
     signal = sig1.copy()
 
     if freq2_hz > 0:
-        phase2 = random.random() * 2*np.pi
-        sig2 = amp2 * np.sin(2*np.pi*freq2_hz*ts + phase2)
+        phase2 = random.random() * 2 * np.pi
+        sig2 = amp2 * np.sin(2 * np.pi * freq2_hz * ts + phase2)
         signal += sig2
 
     if hmncs > 0:
@@ -51,7 +57,7 @@ def simulate_signal(
         dist = np.zeros_like(ts)
 
         # harmonic amplitude shape
-        weights = np.array([1.0/h for h in range(2, num_hmncs+1)])
+        weights = np.array([1.0 / h for h in range(2, num_hmncs + 1)])
         norm = np.sqrt(np.sum(weights**2))
         weights /= norm
 
@@ -59,29 +65,29 @@ def simulate_signal(
 
         if freq2_hz <= 0:
             # THD case
-            for i, h in enumerate(range(2, num_hmncs+1)):
-                phase = random.random() * 2*np.pi
-                dist += weights[i] * np.sin(2*np.pi*(freq_hz*h)*ts + phase)
+            for i, h in enumerate(range(2, num_hmncs + 1)):
+                phase = random.random() * 2 * np.pi
+                dist += weights[i] * np.sin(2 * np.pi * (freq_hz * h) * ts + phase)
         else:
             # IMD products (normalized like harmonics)
             imd_freqs = [
                 abs(freq2_hz - freq_hz),
                 freq2_hz + freq_hz,
-                abs(2*freq_hz - freq2_hz),
-                abs(2*freq2_hz - freq_hz),
+                abs(2 * freq_hz - freq2_hz),
+                abs(2 * freq2_hz - freq_hz),
             ]
 
             imd_weights = np.ones(len(imd_freqs))
             imd_weights /= np.sqrt(np.sum(imd_weights**2))
 
             for w, f in zip(imd_weights, imd_freqs):
-                phase = random.random() * 2*np.pi
-                dist += w * np.sin(2*np.pi*f*ts + phase)
+                phase = random.random() * 2 * np.pi
+                dist += w * np.sin(2 * np.pi * f * ts + phase)
 
         # --- scale THD distortion ---
-        p_sig = np.dot(signal,signal)
-        p_dist = np.dot(dist,dist)
-        dist *= (hmncs * np.sqrt(p_sig/p_dist))
+        p_sig = np.dot(signal, signal)
+        p_dist = np.dot(dist, dist)
+        dist *= hmncs * np.sqrt(p_sig / p_dist)
         signal += dist
 
     if noise_amp > 1e-6:
@@ -89,12 +95,14 @@ def simulate_signal(
 
     return signal
 
+
 class CustomHelpFormatter(argparse.HelpFormatter):
     def _get_help_string(self, action):
         help_text = action.help
         if action.default is not argparse.SUPPRESS:
             help_text += f" (default: {action.default})"
         return help_text
+
 
 class RollingFFTAverage:
     def __init__(self, freq: np.ndarray, window_size: int):
@@ -109,7 +117,7 @@ class RollingFFTAverage:
         self.count = 0
 
     def update(self, mag: np.ndarray) -> np.ndarray:
-        mag2 = mag * mag   # ← do NOT modify input
+        mag2 = mag * mag  # ← do NOT modify input
 
         self.accum -= self.buffer[self.idx]
         self.buffer[self.idx] = mag2
@@ -126,8 +134,10 @@ class RollingFFTAverage:
 def db_rel(k: float) -> float:
     return float("nan") if k <= 0 else 20.0 * math.log10(k)
 
+
 def from_db(db: float) -> float:
     return 10.0 ** (db / 20.0)
+
 
 def find_top_two_peaks(
     wm: np.ndarray,
@@ -182,12 +192,9 @@ def find_top_two_peaks(
     return sorted(filtered, key=lambda i: freqs[i])
 
 
-
-
 def clean_log(values: np.ndarray, floor: float = 1e-20) -> np.ndarray:
     clipped = np.maximum(values, floor)
     return 20.0 * np.log10(clipped)
-
 
 
 class WRef:
@@ -224,8 +231,10 @@ class WRef:
 
         return out
 
+
 def rms(values: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.square(values))))
+
 
 def thd(vfund, vdist):
     if vfund <= EPS:
@@ -234,6 +243,7 @@ def thd(vfund, vdist):
     k = math.sqrt(vdist / vfund)
     return db_rel(k), 100.0 * k
 
+
 def thdn(vfund, vdist, vnoise):
     if vfund <= EPS:
         return float("nan"), float("nan")
@@ -241,11 +251,13 @@ def thdn(vfund, vdist, vnoise):
     k = math.sqrt((vdist + vnoise) / vfund)
     return db_rel(k), 100.0 * k
 
+
 def sinad(vfund, vdist, vnoise):
     if (vdist + vnoise) <= EPS:
         return float("nan")
 
     return db_rel(math.sqrt(vfund / (vdist + vnoise)))
+
 
 def snr(vfund, vnoise):
     if vnoise <= EPS:
@@ -253,8 +265,10 @@ def snr(vfund, vnoise):
 
     return db_rel(math.sqrt(vfund / vnoise))
 
+
 def enob(sinad_db):
     return (sinad_db - 1.76) / 6.02
+
 
 def nearest_index(arr: np.ndarray, value: float) -> int:
     return np.argmin(np.abs(arr - value))
@@ -307,24 +321,46 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--freq", type=int, default=192000, help="Sample rate")
     parser.add_argument("--dev", type=int, default=4, help="ID of sound device")
-    parser.add_argument("--chsel", type=int, default=1, help="Selected channel (0-based)")
+    parser.add_argument(
+        "--chsel", type=int, default=1, help="Selected channel (0-based)"
+    )
     parser.add_argument("--chnum", type=int, default=2, help="Number of channels")
     parser.add_argument("--chunk", type=int, default=65536, help="FFT size")
     parser.add_argument("--adcrng", type=float, default=100.0, help="ADC voltage range")
-    parser.add_argument("--vrange", type=float, default=40.0, help="Display voltage range in V")
-    parser.add_argument("--frange", type=float, default=70000.0, help="Displayed frequency range in Hz")
-    parser.add_argument("--trange", type=float, default=100.0, help="Displayed time range in ms")
-    parser.add_argument("--wrange", type=float, default=-150.0, help="FFT range lower bound in dB")
+    parser.add_argument(
+        "--vrange", type=float, default=40.0, help="Display voltage range in V"
+    )
+    parser.add_argument(
+        "--frange", type=float, default=70000.0, help="Displayed frequency range in Hz"
+    )
+    parser.add_argument(
+        "--trange", type=float, default=100.0, help="Displayed time range in ms"
+    )
+    parser.add_argument(
+        "--wrange", type=float, default=-150.0, help="FFT range lower bound in dB"
+    )
     parser.add_argument("--rload", type=float, default=8.0, help="Load resistor in ohm")
-    parser.add_argument("--thd", type=int, default=7, help="Number of harmonics for THD")
-    parser.add_argument("--duration", type=int, default=240, help="Time to exit in seconds")
+    parser.add_argument(
+        "--thd", type=int, default=7, help="Number of harmonics for THD"
+    )
+    parser.add_argument(
+        "--duration", type=int, default=240, help="Time to exit in seconds"
+    )
     parser.add_argument("--plot", type=str, default="", help="Write plot to file")
     parser.add_argument("--csv", type=str, default="", help="Append metrics to CSV")
     parser.add_argument("--window", type=str, default="hanning", help="Window function")
-    parser.add_argument("--simfreq", type=float, default=0.0, help="Simulate exact frequency in Hz")
-    parser.add_argument("--simnoise", type=float, default=-160.0, help="Simulate noise amplitude in dB")
-    parser.add_argument("--flttsh", type=float, default=160.0, help="Notch filter level in dB")
-    parser.add_argument("--cftsh", type=float, default=0.25, help="Center frequency threshold in Hz")
+    parser.add_argument(
+        "--simfreq", type=float, default=0.0, help="Simulate exact frequency in Hz"
+    )
+    parser.add_argument(
+        "--simnoise", type=float, default=-160.0, help="Simulate noise amplitude in dB"
+    )
+    parser.add_argument(
+        "--flttsh", type=float, default=160.0, help="Notch filter level in dB"
+    )
+    parser.add_argument(
+        "--cftsh", type=float, default=0.25, help="Center frequency threshold in Hz"
+    )
     parser.add_argument(
         "--twotone-rel-db",
         type=float,
@@ -337,13 +373,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=20.0,
         help="Minimum separation between two fundamentals in Hz for IMD detection",
     )
-    parser.add_argument("--simfreq2", type=float, default=0.0,
-                    help="Second simulated tone frequency")
+    parser.add_argument(
+        "--simfreq2", type=float, default=0.0, help="Second simulated tone frequency"
+    )
 
-    parser.add_argument("--simamp2", type=float, default=1.0,
-                    help="Second simulated tone amplitude")
-    parser.add_argument("--simhmncs", type=float, default=0.0,
-                    help="Add harmonics to the simulation")
+    parser.add_argument(
+        "--simamp2", type=float, default=1.0, help="Second simulated tone amplitude"
+    )
+    parser.add_argument(
+        "--simhmncs", type=float, default=0.0, help="Add harmonics to the simulation"
+    )
     return parser
 
 
@@ -351,27 +390,77 @@ def init_csv(path: str) -> None:
     if path and not os.path.isfile(path):
         with open(path, "w", encoding="utf-8") as f:
             f.write(
-                "Mode,F1,F2,THDN_dB,THDN_pct,THD_dB,THD_pct,IMD_dB,IMD_pct,CCIF_dB,CCIF_pct,"
-                "SNR_dB,ENOB,Vrms,Prms\n"
+                "Mode,"
+                "F1_hz,F2_hz,"
+                "THDN_dB,THDN_pct,"
+                "THD_dB,THD_pct,"
+                "IMDN_dB,IMDN_pct,"
+                "IMD_dB,IMD_pct,"
+                "SINAD_db,"
+                "SNR_dB,ENOB,"
+                "Vrms,Prms,"
+                "FFT size,Sample Rate\n"
             )
+
+
+def write_csv(
+    csv,
+    imd_mode,
+    tone1_freq,
+    tone2_freq,
+    thdn_db,
+    thdn_pct,
+    thd_db,
+    thd_pct,
+    imdn_db,
+    imdn_pct,
+    imd_db,
+    imd_pct,
+    snr_db,
+    sinad_db,
+    enob_bits,
+    vrms,
+    prms,
+    fft_size,
+    sample_rate,
+) -> None:
+    if csv and os.path.isfile(csv):
+        mode_name = "IMD" if imd_mode else "THD"
+        with open(csv, "a", encoding="utf-8") as f:
+            f.write(
+                f"{mode_name},"
+                f"{tone1_freq},{tone2_freq},"
+                f"{thdn_db},{thdn_pct},"
+                f"{thd_db},{thd_pct},"
+                f"{imdn_db},{imdn_pct},"
+                f"{imd_db},{imd_pct},"
+                f"{snr_db},"
+                f"{sinad_db},{enob_bits},"
+                f"{vrms},{prms},"
+                f"{fft_size},{sample_rate}\n"
+            )
+
 
 def fft_magnitude(meas: np.ndarray, window: np.ndarray) -> np.ndarray:
     spectrum = np.fft.rfft(meas * window)
     coherent_gain = np.sum(window) / len(window)
-    enbw = np.sum(window**2) / (np.sum(window)**2) * len(window)
+    enbw = np.sum(window**2) / (np.sum(window) ** 2) * len(window)
     mag = np.abs(spectrum) / (len(meas) * coherent_gain)
     mag /= math.sqrt(enbw)
     return mag
 
+
 def compute_fft(meas: np.ndarray, window: np.ndarray, fmask: np.ndarray) -> np.ndarray:
     return fft_magnitude(meas, window) * fmask
+
 
 def time_domain_analyse(meas, load_ohm):
     vpp = float(np.max(meas) - np.min(meas))
     ppeak = float(np.max(np.square(meas)) / load_ohm)
     vrms = rms(meas)
-    prms = (vrms ** 2) / load_ohm
+    prms = (vrms**2) / load_ohm
     return vpp, ppeak, vrms, prms
+
 
 def prime_freq_list(freqs: np.ndarray, mask: np.ndarray) -> np.ndarray:
     out = []
@@ -380,16 +469,18 @@ def prime_freq_list(freqs: np.ndarray, mask: np.ndarray) -> np.ndarray:
             out.append(freqs[i])
     return np.array(out, dtype=float)
 
+
 def best_freq(prime_list: np.ndarray) -> np.ndarray:
     if len(prime_list) == 0:
         return np.array([], dtype=float)
 
-    targets = [60.0, 250.0, 1000.0, 7000.0, 8000., 10000.0, 15000.0, 19000.0, 20000.0]
+    targets = [60.0, 250.0, 1000.0, 7000.0, 8000.0, 10000.0, 15000.0, 19000.0, 20000.0]
     indices = [int(np.argmin(np.abs(prime_list - t))) for t in targets]
     return prime_list[np.clip(indices, 0, len(prime_list) - 1)]
 
+
 def get_fft_params(chunk, sample_rate, freq_range):
-    freqs = np.fft.rfftfreq(chunk, d=1/sample_rate)
+    freqs = np.fft.rfftfreq(chunk, d=1 / sample_rate)
     fmask = np.zeros(len(freqs), dtype=float)
     i_lo = nearest_index(freqs, freq_range[0])
     i_hi = nearest_index(freqs, freq_range[1])
@@ -397,6 +488,7 @@ def get_fft_params(chunk, sample_rate, freq_range):
     prime_freqs = prime_freq_list(freqs, fmask)
     best_freqs = best_freq(prime_freqs)
     return freqs, fmask, i_lo, i_hi, best_freqs
+
 
 def get_ts(chunk, sample_rate, trange):
     tmax = chunk / sample_rate
@@ -406,10 +498,12 @@ def get_ts(chunk, sample_rate, trange):
     ]
     return np.linspace(0.0, tmax, chunk, endpoint=False), time_range
 
+
 def notch(values: np.ndarray, level: float) -> np.ndarray:
     mask = np.zeros_like(values, dtype=float)
     mask[values > level] = 1.0
     return mask
+
 
 def build_single_tone_masks(
     mag: np.ndarray,
@@ -439,6 +533,7 @@ def build_single_tone_masks(
 
     return wc, tones_mask, hrmncs_mask, carrier_freq
 
+
 def build_two_tone_masks(
     mag: np.ndarray,
     freqs: np.ndarray,
@@ -464,15 +559,19 @@ def build_two_tone_masks(
         wc2 *= mpeak2 / wpeak2
 
     mpeak = max(mpeak1, mpeak2)
-    wc = (wc1 + wc2) 
+    wc = wc1 + wc2
     tones_mask = notch(wc, cfg.flt_threshold)
 
-    imd_idx = sorted(set([
-        abs(idx1 - idx2),
-        idx1 + idx2,
-        abs(2 * idx1 - idx2),
-        abs(2 * idx2 - idx1),
-    ]))
+    imd_idx = sorted(
+        set(
+            [
+                abs(idx1 - idx2),
+                idx1 + idx2,
+                abs(2 * idx1 - idx2),
+                abs(2 * idx2 - idx1),
+            ]
+        )
+    )
 
     tmp = np.zeros_like(wc)
     for idx in imd_idx:
@@ -486,6 +585,7 @@ def build_two_tone_masks(
     hrmncs_mask = notch(tmp, cfg.flt_threshold)
     return wc, tones_mask, hrmncs_mask, freq1, freq2
 
+
 def compute_powers(mag, tones_mask, harmonics_mask):
     vfund = np.sum((mag * tones_mask) ** 2)
     vdist = np.sum((mag * harmonics_mask) ** 2)
@@ -493,6 +593,7 @@ def compute_powers(mag, tones_mask, harmonics_mask):
     vnoise = np.sum((mag * noise_mask) ** 2)
     vtotal = vfund + vdist + vnoise
     return vfund, vdist, vnoise, vtotal
+
 
 def main() -> int:
     parser = build_parser()
@@ -527,7 +628,7 @@ def main() -> int:
     db_range = [args.wrange, 0.0]
 
     stream = None
-    
+
     try:
         if args.list:
             list_sound_devices()
@@ -539,17 +640,13 @@ def main() -> int:
         pic_base, pic_ext = os.path.splitext(args.plot) if args.plot else ("", "")
 
         fig, (skip0, ax_time, skip1, ax_freq, skip2) = plt.subplots(
-            5, 1, figsize=(10, 6),
-            gridspec_kw={"height_ratios": [0.05, 2.2, 0.15, 6.5, 2]}
+            5,
+            1,
+            figsize=(10, 6),
+            gridspec_kw={"height_ratios": [0.05, 2.2, 0.15, 6.5, 2]},
         )
 
-        fig.subplots_adjust(
-            left=0.07,
-            right=0.98,
-            top=0.93,
-            bottom=0.0,
-            hspace=0.25
-        )
+        fig.subplots_adjust(left=0.07, right=0.98, top=0.93, bottom=0.0, hspace=0.25)
 
         formatter_s = EngFormatter(unit="s")
         formatter_v = EngFormatter(unit="V")
@@ -559,11 +656,13 @@ def main() -> int:
         ring = RingBuffer((cfg.chunk), cfg.channel_count)
         stream = open_stream(cfg, ring)
 
-        freqs, fmask, i_lo, i_hi, best_freqs = get_fft_params(cfg.chunk, cfg.sample_rate, freq_range)
+        freqs, fmask, i_lo, i_hi, best_freqs = get_fft_params(
+            cfg.chunk, cfg.sample_rate, freq_range
+        )
         ts, time_range = get_ts(cfg.chunk, cfg.sample_rate, args.trange)
-        wref = WRef(ts, window, freqs)     
+        wref = WRef(ts, window, freqs)
         fft_avg = RollingFFTAverage(freqs, 4)
-        
+
         td_step = max(1, len(ts) // 4000)
 
         # ---- STATIC AXIS SETUP ----
@@ -583,9 +682,9 @@ def main() -> int:
         ax_freq.grid()
 
         # ---- PLOT OBJECTS (CREATE ONCE) ----
-        time_line, = ax_time.plot([], [], "r")
-        freq_line, = ax_freq.plot([], [], "b-")
-        wc_line,   = ax_freq.plot([], [], "g.", markersize=3)
+        (time_line,) = ax_time.plot([], [], "r")
+        (freq_line,) = ax_freq.plot([], [], "b-")
+        (wc_line,) = ax_freq.plot([], [], "g.", markersize=3)
 
         # peak annotations storage
         peak_texts = []
@@ -594,7 +693,9 @@ def main() -> int:
         status_text1 = skip2.text(0.01, 0.60, "", fontfamily="monospace", fontsize=10)
         status_text2 = skip2.text(0.01, 0.40, "", fontfamily="monospace", fontsize=10)
         status_text3 = skip2.text(0.01, 0.20, "", fontfamily="monospace", fontsize=10)
-        status_text4 = skip2.text(0.01, 0.00, "", fontfamily="monospace", fontsize=8, style="italic") 
+        status_text4 = skip2.text(
+            0.01, 0.00, "", fontfamily="monospace", fontsize=8, style="italic"
+        )
 
         closed = {"value": False}
 
@@ -607,22 +708,27 @@ def main() -> int:
         skip1.axis("off")
         skip2.axis("off")
 
-
         prev_carrier_idx = -1
         stable_count = 0
-        write_after = 10 
- 
+        write_after = 10
+
         t_start = time.time()
         while (time.time() - t_start < cfg.duration_s) and not closed["value"]:
             if stream is None:
-                meas = simulate_signal(cfg.sim_freq, cfg.sim_noise, ts, cfg.sim_freq2, cfg.sim_amp2, cfg.sim_hmncs, cfg.thd_harmonics)
+                meas = simulate_signal(
+                    cfg.sim_freq,
+                    cfg.sim_noise,
+                    ts,
+                    cfg.sim_freq2,
+                    cfg.sim_amp2,
+                    cfg.sim_hmncs,
+                    cfg.thd_harmonics,
+                )
             else:
                 meas = read_measurement(cfg, ring)
                 if meas is None:
-                    time.sleep(.001)
+                    time.sleep(0.001)
                     continue
-                # push_tm, pop_tm = ring.stat()
-                # print(f"push {push_tm*1000:.0f}ms pop {pop_tm*1000:.0f}ms")
 
             if len(meas) < 16:
                 raise RuntimeError("Measurement buffer too short.")
@@ -631,7 +737,7 @@ def main() -> int:
             vpp, ppeak, vrms, prms = time_domain_analyse(meas, cfg.load_ohm)
 
             mag = fft_avg.update(compute_fft(meas, window, fmask))
-           
+
             peak_indices = find_top_two_peaks(
                 mag,
                 freqs,
@@ -651,51 +757,28 @@ def main() -> int:
                     harmonics_mask,
                     tone1_freq,
                     tone2_freq,
-                ) = build_two_tone_masks(
-                    mag, freqs, idx1, idx2, wref, cfg
-                )
-            else: 
-                (
-                    wc,
-                    tones_mask,
-                    harmonics_mask,
-                    tone1_freq
-                ) = build_single_tone_masks(
+                ) = build_two_tone_masks(mag, freqs, idx1, idx2, wref, cfg)
+            else:
+                (wc, tones_mask, harmonics_mask, tone1_freq) = build_single_tone_masks(
                     mag, freqs, carrier_idx, wref, cfg
                 )
                 tone2_freq = 0
 
-            vfund, vdist, vnoise, vtotal = compute_powers(mag, tones_mask, harmonics_mask)       
-            imd_db, imd_pct = thd(
-                vfund,
-                vdist
+            vfund, vdist, vnoise, vtotal = compute_powers(
+                mag, tones_mask, harmonics_mask
             )
-    
-            imdn_db, imdn_pct = thdn(
-                vfund,
-                vdist,
-                vnoise
-                )
+            imd_db, imd_pct = thd(vfund, vdist)
 
-            sinad_db = sinad_pct = sinad(
-                vfund, vdist, vnoise)
-                
-            thd_db, thd_pct = thd(
-                    vfund,
-                    vdist
-                )
+            imdn_db, imdn_pct = thdn(vfund, vdist, vnoise)
 
-            thdn_db, thdn_pct = thdn(
-                vfund,
-                vdist,
-                vnoise
-            )
-                
-            snr_db = snr(
-                vfund,
-                vnoise
-            )
-            
+            sinad_db = sinad_pct = sinad(vfund, vdist, vnoise)
+
+            thd_db, thd_pct = thd(vfund, vdist)
+
+            thdn_db, thdn_pct = thdn(vfund, vdist, vnoise)
+
+            snr_db = snr(vfund, vnoise)
+
             enob_bits = enob(snr_db)
 
             # ---- TIME PLOT (DECIMATED) ----
@@ -703,23 +786,17 @@ def main() -> int:
 
             # ---- FFT PLOT ----
             mag_db_full = clean_log(mag)
-            wc_db_full  = clean_log(wc)
+            wc_db_full = clean_log(wc)
 
             top = mag_db_full[i_lo:i_hi].max()
 
-            freq_line.set_data(
-                freqs[i_lo:i_hi],
-                mag_db_full[i_lo:i_hi] - top
-            )
+            freq_line.set_data(freqs[i_lo:i_hi], mag_db_full[i_lo:i_hi] - top)
 
-            wc_line.set_data(
-                freqs[i_lo:i_hi],
-                wc_db_full[i_lo:i_hi] - top
-            )
+            wc_line.set_data(freqs[i_lo:i_hi], wc_db_full[i_lo:i_hi] - top)
 
             # ---- PEAK ANNOTATIONS (reuse) ----
             for t in peak_texts:
-               t.remove()
+                t.remove()
             peak_texts.clear()
 
             if not imd_mode and carrier_idx > 0:
@@ -814,35 +891,42 @@ def main() -> int:
             status_text2.set_text(line2)
             status_text3.set_text(line3)
             status_text4.set_text(ref_line)
-            
+
             fig.canvas.draw_idle()
             fig.canvas.flush_events()
 
             if carrier_idx == prev_carrier_idx:
                 stable_count += 1
             else:
-                prev_carrier_idx = carrier_idx 
+                prev_carrier_idx = carrier_idx
 
-            if stable_count == write_after and pic_base:
-                plt.savefig(
-                    f"{pic_base}_{tone1_freq:.0f}Hz_{tone2_freq:.0f}Hz{pic_ext}"
-                )
-
-            if stable_count == write_after and args.csv:
-
-                mode_name = "IMD" if imd_mode else "THD"
-
-                with open(args.csv, "a", encoding="utf-8") as f:
-                    f.write(
-                        f"{mode_name},{tone1_freq},{tone2_freq},"
-                        f"{thdn_db},{thdn_pct},"
-                        f"{thd_db},{thd_pct},"
-                        f"{imd_db},{imd_pct},"
-                        f"{imdn_db},{imdn_pct},"
-                        f"{snr_db},{enob_bits},"
-                        f"{vrms},{prms}\n"
+            if stable_count == write_after:
+                if pic_base:
+                    plt.savefig(
+                        f"{pic_base}_{tone1_freq:.0f}Hz_{tone2_freq:.0f}Hz{pic_ext}"
                     )
 
+                write_csv(
+                    args.csv,
+                    imd_mode,
+                    tone1_freq,
+                    tone2_freq,
+                    thdn_db,
+                    thdn_pct,
+                    thd_db,
+                    thd_pct,
+                    imdn_db,
+                    imdn_pct,
+                    imd_db,
+                    imd_pct,
+                    snr_db,
+                    sinad_db,
+                    enob_bits,
+                    vrms,
+                    prms,
+                    cfg.chunk,
+                    cfg.sample_rate,
+                )
 
         return 0
 
