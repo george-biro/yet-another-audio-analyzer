@@ -356,7 +356,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--simnoise", type=float, default=-160.0, help="Simulate noise amplitude in dB"
     )
     parser.add_argument(
-        "--flttsh", type=float, default=160.0, help="Notch filter level in dB"
+        "--flttsh", type=float, default=120.0, help="Notch filter level in dB"
     )
     parser.add_argument(
         "--cftsh", type=float, default=0.25, help="Center frequency threshold in Hz"
