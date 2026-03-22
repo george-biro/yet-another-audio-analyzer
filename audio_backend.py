@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import sounddevice as sd
 import platform
 import sys
-
+import threading
 
 @dataclass
 class AudioConfig:
@@ -43,47 +43,56 @@ class RingBuffer:
         self.chunk = chunk
         self.channels = channels
         self.depth = depth
-
-        # FIFO elements are whole chunks
         self.buffers = [
-            np.empty((chunk, channels), dtype=np.float32) for _ in range(depth)
+            np.zeros((chunk, channels), dtype=np.float32) for _ in range(depth)
         ]
-
         self.pos = 0
         self.head = 0
         self.tail = 0
         self.count = 0
         self.overflow = 0
+        self.lock = threading.Lock()
+
+    def reset(self):
+        self.pos = 0
+        self.buffers[self.head].fill(0.0) 
 
     def drop(self):
         self.overflow += 1
-        self.pos = 0
+        self.reset()
 
     def push(self, data: np.ndarray):
         n = len(data)
         m = min(self.chunk - self.pos, n)
-        self.buffers[self.head][self.pos : self.pos + m] = data[:m]
+        self.buffers[self.head][self.pos:self.pos + m] = data[:m]
         self.pos += m
+
         if self.pos >= self.chunk:
-            self.pos = 0
-            headnxt = (self.head + 1) % self.depth
-            if headnxt != tail:
-                self.head = headnxt
-                self.count += 1
+            # as drop and push called from the same 
+            # thread, here the locking is enough!
+            with self.lock:
+                hnxt = (self.head + 1) % self.depth
+                if hnxt != self.tail:
+                    self.head = hnxt
+                    self.count += 1
+
+                self.reset()
+                
 
     def pop(self):
-        if self.head == self.tail:
-            return None
-
-        rv = self.tail
-        self.tail = (self.tail + 1) % self.depth
-        self.count -= 1
-        if self.count > 3:
-            print("WARNING: sys overload!")
-        return self.buffers[rv]
+        with self.lock:
+            if self.head == self.tail:
+                return None
+            rv = self.tail
+            self.tail = (self.tail + 1) % self.depth
+            self.count -= 1
+            return self.buffers[rv].copy()
 
     def stat(self):
-        return self.overflow
+        with self.lock:
+            rv = self.overflow
+            self.overflow = 0
+            return rv, self.count
 
 
 def list_sound_devices() -> None:
@@ -130,13 +139,33 @@ def open_stream(cfg: AudioConfig, ring: RingBuffer):
         else:
             blocksize = 2048
 
-        latency = 0.05
+        #latency = 0.05
+        latency = "high"
 
     print(f"[INFO] blocksize={blocksize} latency={latency}")
 
+    last_adc_time = None
+    
     def callback(indata, frames, time_info, status):
+        nonlocal last_adc_time
+
+        ti = time_info[0]
+        t = ti.inputBufferAdcTime
+
+        drop = False
+        
         if status:
-            #            print("AUDIO ERROR:", status, "frames:", frames)
+            drop = True
+        elif last_adc_time is not None:
+            dt = t - last_adc_time
+            expected = frames / cfg.sample_rate
+            err = dt - expected
+            if abs(err) > 1e-3:
+                drop = True
+
+        last_adc_time = t
+
+        if drop:
             ring.drop()
         else:
             ring.push(indata)
@@ -154,7 +183,7 @@ def open_stream(cfg: AudioConfig, ring: RingBuffer):
     )
 
     stream.start()
-    cfg.samplerate = stream.samplerate
+    cfg.sample_rate = stream.samplerate
     return stream
 
 
