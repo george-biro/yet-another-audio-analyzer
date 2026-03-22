@@ -7,7 +7,9 @@
 # GPLv3-or-later
 #
 # File: audio_backend.py
-
+#
+# This is part of the yaar project
+#
 import numpy as np
 from dataclasses import dataclass
 import sounddevice as sd

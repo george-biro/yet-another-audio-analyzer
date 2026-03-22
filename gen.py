@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-
+#
+# Test Generator
+#
+# Copyright 2026 George Biro
+#
+# GPLv3-or-later
+#
+# File: gen.py
+#
+# This is part of the yaar project
+#
 import argparse
 import math
 import numpy as np

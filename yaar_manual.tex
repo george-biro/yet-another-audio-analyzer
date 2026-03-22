@@ -1,0 +1,334 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{amsmath}
+\usepackage{graphicx}
+
+\title{\textbf{Yet Another Audio analyzeR (YAAR)}\\
+User Manual}
+\author{George Biro}
+\date{2026}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=blue
+}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single
+}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+\newpage
+
+\section{Overview}
+
+\textbf{Yet Another Audio analyzeR (YAAR)} is a real-time audio measurement and analysis tool designed for:
+
+\begin{itemize}
+    \item Audio signal inspection (time and frequency domain)
+    \item FFT-based spectral analysis
+    \item Distortion analysis (THD, THD+N, IMD)
+    \item Signal quality metrics (SNR, SINAD, ENOB)
+    \item Power calculations (Vrms, Prms)
+    \item Signal simulation for testing
+\end{itemize}
+
+\section{Features}
+
+\subsection{Core Capabilities}
+\begin{itemize}
+    \item Real-time FFT visualization
+    \item Rolling FFT averaging
+    \item Automatic fundamental detection
+    \item THD / THD+N computation
+    \item IMD (two-tone intermodulation distortion)
+    \item Noise floor estimation
+\end{itemize}
+
+\subsection{Output}
+\begin{itemize}
+    \item CSV logging
+    \item Plot export
+\end{itemize}
+
+\section{Installation}
+
+\subsection{Requirements}
+\begin{itemize}
+    \item Python 3.9+
+    \item Required packages:
+\end{itemize}
+
+\begin{lstlisting}
+pip install numpy matplotlib
+\end{lstlisting}
+
+
+\section{Basic Usage}
+
+\subsection{Run the program}
+\begin{lstlisting}
+python yaar.py
+\end{lstlisting}
+
+\subsection{List audio devices}
+\begin{lstlisting}
+python yaar.py --list
+\end{lstlisting}
+
+\subsection{Simulation mode}
+\begin{lstlisting}
+python yaar.py --simfreq 1000
+\end{lstlisting}
+
+\section{Command-Line Arguments}
+
+\subsection{Audio Configuration}
+
+\begin{longtable}{lll}
+\toprule
+Option & Description & Default \\
+\midrule
+--freq & Sample rate (Hz) & 192000 \\
+--dev & Audio device ID & 4 \\
+--chsel & Channel index & 1 \\
+--chnum & Number of channels & 2 \\
+\bottomrule
+\end{longtable}
+
+\subsection{FFT \& Analysis}
+
+\begin{longtable}{lll}
+\toprule
+Option & Description & Default \\
+\midrule
+--chunk & FFT size & 65536 \\
+--window & Window function & hanning \\
+--thd & Number of harmonics & 7 \\
+\bottomrule
+\end{longtable}
+
+\subsection{Display Settings}
+
+\begin{longtable}{lll}
+\toprule
+Option & Description & Default \\
+\midrule
+--vrange & Voltage range & 40 \\
+--frange & Frequency range & 70000 \\
+--trange & Time range (ms) & 100 \\
+--wrange & FFT lower bound (dB) & -150 \\
+\bottomrule
+\end{longtable}
+
+\subsection{Simulation}
+
+\begin{longtable}{lll}
+\toprule
+Option & Description & Default \\
+\midrule
+--simfreq & Primary frequency & 0 \\
+--simfreq2 & Second tone & 0 \\
+--simamp2 & Second tone amplitude & 1.0 \\
+--simnoise & Noise level (dB) & -160 \\
+--simhmncs & Harmonics level & 0 \\
+\bottomrule
+\end{longtable}
+
+\subsection{Output}
+
+\begin{longtable}{ll}
+\toprule
+Option & Description \\
+\midrule
+--plot & Save plot to file \\
+--csv & Append results to CSV \\
+\bottomrule
+\end{longtable}
+
+\section{User Interface}
+
+\subsection{Time Domain}
+Displays waveform amplitude vs time.
+
+\subsection{Frequency Domain}
+\begin{itemize}
+    \item Log-scale FFT spectrum
+    \item Shows fundamental tones and harmonics
+\end{itemize}
+
+\subsection{Status Panel}
+Displays:
+
+\begin{itemize}
+    \item Frequency (F1, F2)
+    \item THD / THD+N or IMD
+    \item SNR, ENOB
+    \item Voltage and power
+\end{itemize}
+
+\section{Measurement Metrics}
+
+\subsection{THD}
+Total harmonic distortion:
+\[
+\mathrm{THD} = \sqrt{\frac{V_{\mathrm{dist}}}{V_{\mathrm{fund}}}}
+\]
+
+\subsection{THD+N}
+Includes noise:
+\[
+\mathrm{THD+N} = \sqrt{\frac{V_{\mathrm{dist}} + V_{\mathrm{noise}}}{V_{\mathrm{fund}}}}
+\]
+
+\subsection{SNR}
+\[
+\mathrm{SNR} = 20 \log_{10} \left(\sqrt{\frac{V_{\mathrm{fund}}}{V_{\mathrm{noise}}}} \right)
+\]
+
+\subsection{ENOB}
+\[
+\mathrm{ENOB} = \frac{\mathrm{SINAD} - 1.76}{6.02}
+\]
+
+\section{Operating Modes}
+
+\subsection{Single-Tone Mode}
+\begin{itemize}
+    \item One dominant frequency
+    \item Computes THD and THD+N
+\end{itemize}
+
+\subsection{Two-Tone Mode}
+\begin{itemize}
+    \item Two detected tones
+    \item Computes IMD and CCIF IMD
+\end{itemize}
+
+\section{Simulation Examples}
+
+\subsection{Clean signal}
+\begin{lstlisting}
+python yaar.py --simfreq 1000
+\end{lstlisting}
+
+\subsection{With noise}
+\begin{lstlisting}
+python yaar.py --simfreq 1000 --simnoise -80
+\end{lstlisting}
+
+\subsection{With harmonics}
+\begin{lstlisting}
+python yaar.py --simfreq 1000 --simhmncs 0.01
+\end{lstlisting}
+
+\subsection{Two-tone IMD}
+\begin{lstlisting}
+python yaar.py --simfreq 1000 --simfreq2 1200
+\end{lstlisting}
+
+\section{CSV Output}
+
+When enabled:
+\begin{lstlisting}
+--csv results.csv
+\end{lstlisting}
+
+The file includes:
+
+\begin{itemize}
+    \item Mode (THD / IMD)
+    \item Frequencies
+    \item Distortion metrics
+    \item SNR, SINAD, ENOB
+    \item Voltage and power
+\end{itemize}
+
+\section{Plot Export}
+
+\begin{lstlisting}
+--plot output.png
+\end{lstlisting}
+
+Plots are saved automatically when the signal stabilizes.
+
+\section{Tips for Accurate Measurements}
+
+\begin{itemize}
+    \item Use large FFT sizes
+    \item Avoid clipping
+    \item Match signal frequency to FFT bins
+    \item Ensure low-noise input
+\end{itemize}
+
+\section{Troubleshooting}
+
+\subsection{No signal}
+\begin{itemize}
+    \item Check device ID
+    \item Verify channel selection
+\end{itemize}
+
+\subsection{Noisy FFT}
+\begin{itemize}
+    \item Increase FFT size
+\end{itemize}
+
+\section{Limitations}
+
+\begin{itemize}
+    \item Requires external audio backend
+    \item CLI-only interface
+    \item Performance depends on CPU
+\end{itemize}
+
+\section{Exit Conditions}
+
+The program stops when:
+\begin{itemize}
+    \item Duration expires
+    \item Window is closed
+    \item Ctrl+C is pressed
+\end{itemize}
+
+\section{Example Workflows}
+
+\subsection{Amplifier test}
+\begin{lstlisting}
+python yaar.py --freq 192000 --chunk 65536 --rload 8
+\end{lstlisting}
+
+\subsection{ADC test}
+\begin{lstlisting}
+python yaar.py --simfreq 1000 --simnoise -100 --csv adc.csv
+\end{lstlisting}
+
+\subsection{Generate plots}
+\begin{lstlisting}
+python yaar.py --simfreq 1000 --plot spectrum.png
+\end{lstlisting}
+
+\section{Summary}
+
+YAAR is a flexible and powerful audio analysis tool combining:
+
+\begin{itemize}
+    \item Real-time visualization
+    \item Accurate spectral analysis
+    \item Advanced distortion metrics
+    \item Signal simulation
+\end{itemize}
+
+\end{document}
