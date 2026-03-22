@@ -36,13 +36,17 @@ A Real-Time FFT-Based Audio Measurement Tool for Distortion, Noise, and Power An
 \author{\IEEEauthorblockN{George Biro}
 \IEEEauthorblockA{Independent Developer\\
 GPLv3-or-later\\
-Email: not specified}}
+Email: george.biro@gmail.com}}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-This paper presents Yet Another Audio analyzeR (YAAR), a command-line and interactive plotting tool for real-time audio analysis. YAAR combines time-domain monitoring, FFT-based spectral estimation, rolling magnitude averaging, automatic tone detection, and measurement of total harmonic distortion (THD), total harmonic distortion plus noise (THD+N), intermodulation distortion (IMD), signal-to-noise ratio (SNR), signal-to-noise-and-distortion ratio (SINAD), effective number of bits (ENOB), and electrical output metrics such as $V_{\mathrm{RMS}}$ and $P_{\mathrm{RMS}}$. The tool supports both live acquisition from an audio backend and fully synthetic signal generation for repeatable test scenarios. This document serves as a professional user and technical manual, describing the operating principles, command-line interface, measurement workflow, configuration parameters, and practical usage recommendations.
+This paper presents Yet Another Audio analyzeR (YAAR), a lightweight command-line and interactive plotting tool for real-time audio analysis, together with a separate signal generator utility for deterministic test signal synthesis. The analyzer combines time-domain monitoring, FFT-based spectral estimation, rolling magnitude averaging, automatic tone detection, and measurement of total harmonic distortion (THD), total harmonic distortion plus noise (THD+N), intermodulation distortion (IMD), signal-to-noise ratio (SNR), signal-to-noise-and-distortion ratio (SINAD), effective number of bits (ENOB), and electrical output metrics such as $V_{\mathrm{RMS}}$ and $P_{\mathrm{RMS}}$.
+
+YAAR supports both live acquisition from an audio backend and an internal simulation mode, while the accompanying generator produces phase-continuous single-tone and two-tone excitation signals for controlled measurements. The two programs can be used independently or combined to form a complete measurement chain, enabling real-time analysis, repeatable simulation, and end-to-end validation of audio systems.
+
+This document serves as a professional user and technical manual, describing the operating principles, command-line interfaces, measurement workflow, configuration parameters, and practical usage recommendations.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -50,15 +54,19 @@ audio measurement, FFT, THD, THD+N, IMD, SNR, SINAD, ENOB, spectrum analysis, Py
 \end{IEEEkeywords}
 
 \section{Introduction}
-Audio test workflows often require a compact tool that can acquire signals, display them in real time, and compute practical quality metrics without the overhead of a full laboratory software suite. YAAR addresses this need with a lightweight Python implementation centered on FFT analysis and a clear operational model. The program supports either a physical input stream or a simulation path, which makes it useful both for bench validation and algorithm development.
+Audio test workflows often require a compact toolset that can both generate controlled excitation signals and analyze responses in real time, without the overhead of a full laboratory software suite. YAAR addresses the analysis side of this requirement with a lightweight Python implementation centered on FFT-based processing and a clear operational model.
+
+In addition to the analyzer, the project includes a separate signal generator utility, enabling deterministic single-tone and two-tone stimulus generation. The two programs can be used independently or combined to form a complete measurement chain, supporting both purely simulated scenarios and end-to-end hardware validation.
+
+The analyzer supports either a physical input stream or an internal simulation path, making it suitable for both bench measurements and algorithm development, while the external generator enables validation of real signal paths including DACs, amplifiers, and ADCs.
 
 The software is designed around the following goals:
 \begin{enumerate}[leftmargin=*,nosep]
     \item real-time visualization of the waveform and spectrum,
     \item robust spectral metric extraction under single-tone and two-tone conditions,
+    \item deterministic signal generation for repeatable test scenarios,
     \item simple command-line configuration,
-    \item CSV and plot export for repeatable reporting, and
-    \item deterministic simulation of noise and distortion scenarios.
+    \item CSV and plot export for reproducible reporting.
 \end{enumerate}
 
 \section{System Overview}
@@ -415,6 +423,161 @@ The following implementation details are important to understand:
 \end{itemize}
 
 A small code-level observation is worth noting for users interpreting exported CSV data: the CSV header places \texttt{SINAD\_db} before \texttt{SNR\_dB}, while the write function currently writes the values in the order \texttt{snr\_db} followed by \texttt{sinad\_db}. If strict column alignment matters for downstream analysis, verify this mapping in your post-processing pipeline.
+
+\section{Signal Generator Utility}
+
+\subsection{Overview}
+In addition to the YAAR analyzer, the project provides a separate command-line program (\texttt{gen.py}) for real-time audio signal generation. The generator is an independent tool and can be used either together with YAAR or as a standalone excitation source for external measurement setups.
+
+Its primary purpose is to provide controlled and repeatable test signals for:
+\begin{itemize}[leftmargin=*,nosep]
+    \item distortion and noise measurements,
+    \item intermodulation testing,
+    \item system validation of ADC/DAC chains, and
+    \item calibration and verification tasks.
+\end{itemize}
+
+\subsection{Relationship to YAAR}
+The generator and analyzer are intentionally decoupled:
+\begin{itemize}[leftmargin=*,nosep]
+    \item \textbf{YAAR (\texttt{yaar.py})} performs acquisition, FFT analysis, and metric extraction.
+    \item \textbf{Generator (\texttt{gen.py})} produces deterministic excitation signals.
+\end{itemize}
+
+They may be used:
+\begin{itemize}[leftmargin=*,nosep]
+    \item independently, or
+    \item together as a measurement pair (e.g., generator output looped into analyzer input).
+\end{itemize}
+
+YAAR also includes an internal simulation mode; however, the external generator enables testing of full hardware signal paths.
+
+\subsection{Design Principles}
+The generator uses a \textit{phase accumulator} architecture to ensure:
+\begin{itemize}[leftmargin=*,nosep]
+    \item frequency accuracy independent of buffer size,
+    \item phase continuity across blocks,
+    \item absence of discontinuities or clicks, and
+    \item deterministic long-duration behavior.
+\end{itemize}
+
+\subsection{Signal Model}
+The generated waveform consists of one or two sinusoidal components:
+\begin{equation}
+x[n] = A_1 \sin(\phi_1[n]) + A_2 \sin(\phi_2[n])
+\end{equation}
+
+with phase evolution:
+\begin{equation}
+\phi_k[n+1] = \phi_k[n] + \frac{2\pi f_k}{f_s}, \quad k \in \{1,2\}.
+\end{equation}
+
+The second tone is optional and defined via an amplitude ratio:
+\begin{equation}
+A_2 = \frac{A_1}{r}
+\end{equation}
+
+The output is scaled by a global level parameter:
+\begin{equation}
+y[n] = \alpha \cdot x[n], \quad \alpha \in [0,1].
+\end{equation}
+
+\subsection{Implementation}
+The generator is implemented as a \texttt{SineGenerator} class maintaining:
+\begin{itemize}[leftmargin=*,nosep]
+    \item phase accumulators,
+    \item phase increments derived from frequency and sample rate,
+    \item amplitude scaling for multi-tone operation.
+\end{itemize}
+
+Audio output is produced as a continuous stream of 32-bit floating-point samples.
+
+\subsection{Command-Line Interface}
+\begin{table}[t]
+\centering
+\caption{Signal generator command-line options.}
+\label{tab:gen_cli}
+\begin{tabular}{>{\ttfamily}p{2.6cm} p{4.8cm}}
+\toprule
+Option & Description \\
+\midrule
+--list & List available output devices \\
+--dev & Output device index \\
+--rate & Sampling rate (Hz) \\
+--chunk & Block size (samples) \\
+--freq & Primary tone frequency (Hz) \\
+--freq2 & Secondary tone frequency (Hz) \\
+--ratio & Amplitude ratio A/B \\
+--level & Output amplitude scaling (0..1) \\
+--time & Run time in seconds (0 = continuous) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Example Usage}
+\begin{lstlisting}[style=shellstyle]
+# List output devices
+python gen.py --list
+
+# Single-tone signal
+python gen.py --dev 2 --freq 1000
+
+# Two-tone IMD test
+python gen.py --dev 2 --freq 1000 --freq2 1200 --ratio 1
+
+# Limited duration test
+python gen.py --dev 2 --freq 1000 --time 10
+\end{lstlisting}
+
+\subsection{Limitations}
+\begin{itemize}[leftmargin=*,nosep]
+    \item Single-channel output
+    \item No built-in dithering or noise shaping
+    \item Performance limited by Python execution at very high rates
+\end{itemize}
+
+\subsection{Summary}
+The generator complements YAAR by providing a stable and controllable excitation source. While YAAR supports internal simulation, the external generator enables full end-to-end testing of real-world signal chains.
+
+\section{Requirements and Execution}
+
+\subsection{Software Requirements}
+Both YAAR (\texttt{yaar.py}) and the signal generator (\texttt{gen.py}) are implemented in Python and require:
+
+\begin{itemize}[leftmargin=*,nosep]
+    \item Python 3.9 or newer
+    \item \texttt{numpy} for numerical processing
+    \item \texttt{matplotlib} for visualization (YAAR)
+    \item an audio I/O library (e.g.\ \texttt{pyaudio} or equivalent backend)
+\end{itemize}
+
+\subsection{Hardware Requirements}
+\begin{itemize}[leftmargin=*,nosep]
+    \item For analysis: a compatible audio input device
+    \item For signal generation: a compatible audio output device
+    \item For loopback testing: physical or virtual connection between output and input
+\end{itemize}
+
+\subsection{Program Execution}
+Both tools are executed independently from the command line:
+
+\begin{lstlisting}[style=shellstyle]
+# Run analyzer
+python yaar.py [options]
+
+# Run generator
+python gen.py [options]
+\end{lstlisting}
+
+\subsection{Combined Operation}
+A typical measurement setup uses both tools together:
+\begin{itemize}[leftmargin=*,nosep]
+    \item \texttt{gen.py} produces the excitation signal
+    \item the signal is routed (physically or virtually) to the input
+    \item \texttt{yaar.py} performs spectral analysis and metric extraction
+\end{itemize}
+
+No direct coupling between the programs is required.
 
 \section{Troubleshooting}
 \subsection{No Input or Empty Display}
