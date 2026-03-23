@@ -640,6 +640,25 @@ This setup represents a real hardware measurement chain, where the generator pro
 \label{fig:hwtest_987hz}
 \end{figure}
 
+\subsection{Hardware Two-Tone IMD (CCIF) Measurement Example}
+
+Figure~\ref{fig:hwtest_ccif} shows a two-tone measurement using a FiiO BR13 connected to a COSMOS E1DA ADC. The excitation signal was generated using:
+
+\begin{lstlisting}[style=shellstyle]
+python gen.py --dev 0 --freq 243.16 --freq2 6999.02
+\end{lstlisting}
+
+This configuration produces a CCIF-style intermodulation test, where two widely spaced tones are used to evaluate nonlinear behavior. The resulting spectrum allows observation of intermodulation distortion (IMD) products, including sum and difference components, as well as higher-order mixing artifacts.
+
+Both IMD and CCIF-related distortion components can be identified and evaluated directly from the spectral output.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\columnwidth]{fiio3br_243Hz_6999Hz.png}
+\caption{Two-tone IMD (CCIF) measurement using FiiO BR13 and COSMOS E1DA ADC with tones at \SI{243.16}{Hz} and \SI{6999.02}{Hz}.}
+\label{fig:hwtest_ccif}
+\end{figure}
+
 \section{Troubleshooting}
 \subsection{No Input or Empty Display}
 Check the selected device index with \texttt{--list}, verify the correct channel number, and confirm that the chosen device supports the requested sample rate.
