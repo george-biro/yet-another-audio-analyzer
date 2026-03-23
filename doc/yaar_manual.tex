@@ -378,7 +378,15 @@ python yaar.py --simfreq 1000 --simfreq2 1200 --simamp2 1.0
 \begin{lstlisting}[style=shellstyle]
 python yaar.py --simfreq 1000 --csv results.csv --plot spectrum.png
 \end{lstlisting}
-When the detected carrier remains stable for the required number of iterations, YAAR appends a CSV record and optionally saves an image whose file name includes the detected tone frequencies.
+When the detected carrier remains stable for the required number of iterations, YAAR appends a CSV record and optionally saves plot images.
+
+If plot export is enabled (via \texttt{--plot}), the analyzer generates one output image per detected frequency configuration. The file names follow the pattern:
+\begin{center}
+\texttt{<base>\_<freq1>hz\_<freq2>hz.png}
+\end{center}
+where \texttt{<base>} is the user-provided path and \texttt{freq1}, \texttt{freq2} are the detected fundamental frequencies. In single-tone mode, the second frequency is set to zero.
+
+This behavior allows straightforward automated analysis and batch processing, as multiple measurement conditions produce uniquely identifiable output files.
 
 \section{CSV Output Format}
 When a CSV path is provided and the file does not yet exist, YAAR writes a header row with the following fields:
@@ -515,6 +523,8 @@ Option & Description \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+The \texttt{--time} parameter enables bounded-duration execution, which is particularly useful for automated testing and scripting. When specified, the generator runs for the given number of seconds and then exits cleanly, allowing integration into batch pipelines or regression test frameworks. A value of \texttt{0} results in continuous operation until interrupted.
 
 \subsection{Example Usage}
 \begin{lstlisting}[style=shellstyle]
