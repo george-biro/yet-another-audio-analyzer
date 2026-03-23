@@ -627,6 +627,19 @@ The resulting spectrum demonstrates automatic transition into IMD mode, with ide
 \label{fig:simtest_7khz_60hz}
 \end{figure}
 
+\subsection{Hardware Single-Tone Measurement Example}
+
+Figure~\ref{fig:hwtest_987hz} shows a measurement performed using a UNI-T UTG932E signal generator, configured at \SI{987.3}{Hz}, and connected to a COSMOS E1DA ADC.
+
+This setup represents a real hardware measurement chain, where the generator provides a stable excitation signal and the ADC captures the response for FFT-based analysis in YAAR. The resulting spectrum demonstrates practical system performance, including noise floor and distortion components introduced by the physical signal path.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\columnwidth]{unit_utg932e_987Hz_0Hz.png}
+\caption{Hardware measurement using a UNI-T UTG932E signal generator at \SI{987.3}{Hz} and a COSMOS E1DA ADC.}
+\label{fig:hwtest_987hz}
+\end{figure}
+
 \section{Troubleshooting}
 \subsection{No Input or Empty Display}
 Check the selected device index with \texttt{--list}, verify the correct channel number, and confirm that the chosen device supports the requested sample rate.

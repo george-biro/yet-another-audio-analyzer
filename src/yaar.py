@@ -750,7 +750,6 @@ def main() -> int:
 
             if imd_mode:
                 idx1, idx2 = peak_indices[:2]
-
                 (
                     wc,
                     tones_mask,
@@ -899,6 +898,7 @@ def main() -> int:
                 stable_count += 1
             else:
                 prev_carrier_idx = carrier_idx
+                stable_count = 0
 
             if stable_count == write_after:
                 if pic_base:
