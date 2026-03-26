@@ -65,7 +65,7 @@ def simulate_signal(
 
         if freq2_hz <= 0:
             # THD case
-            for i, h in enumerate(range(2, num_hmncs + 1)):
+            for i, h in enumerate(range(2, thd_hmncs + 1)):
                 phase = random.random() * 2 * np.pi
                 dist += weights[i] * np.sin(2 * np.pi * (freq_hz * h) * ts + phase)
         else:
@@ -257,8 +257,8 @@ def sinad(vfund, vdist, vnoise):
 def snr(vfund, vnoise):
     return db_rel(pratio1(vfund, vnoise))
 
-def enob(sinad_db):
-    return (sinad_db - 1.76) / 6.02
+def enob(snr_db):
+    return (snr_db - 1.76) / 6.02
 
 def nearest_index(arr: np.ndarray, value: float) -> int:
     return np.argmin(np.abs(arr - value))
@@ -276,7 +276,7 @@ def is_prime(n: int) -> bool:
 def nearest_fft_size(x: int) -> int:
     if x < 2:
         raise ValueError("FFT size must be >= 2")
-    return 2 ** round(math.log2(x))
+    return 2 ** math.ceil(math.log2(x))
 
 
 def noise_from_db(x: float) -> float:
@@ -384,8 +384,9 @@ def init_csv(path: str) -> None:
                 "THDN_dB,THDN_pct,"
                 "THD_dB,THD_pct,"
                 "CCIF_dB,CCIF_pct,"
-                "SINAD_db,"
-                "SNR_dB,ENOB,"
+                "SMPTE_dB,SMPTE_pct,"
+                "SNR_dB,"
+                "SINAD_db,ENOB,"
                 "Vrms,Prms,"
                 "FFT size,Sample Rate\n"
             )
@@ -472,7 +473,7 @@ def get_fft_params(chunk, sample_rate, freq_range):
     fmask = np.zeros(len(freqs), dtype=float)
     i_lo = nearest_index(freqs, freq_range[0])
     i_hi = nearest_index(freqs, freq_range[1])
-    fmask[i_lo:i_hi] = 1.0
+    fmask[i_lo:i_hi+1] = 1.0
     prime_freqs = prime_freq_list(freqs, fmask)
     best_freqs = best_freq(prime_freqs)
     return freqs, fmask, i_lo, i_hi, best_freqs
