@@ -899,7 +899,14 @@ def main() -> int:
             ref_line = f"{'REF':<6}"
             for bf in best_freqs:
                 mark = "*" if abs(tone1_freq - bf) < 1e-6 else " "
-                ref_line += f"{bf:>8.2f} Hz{mark} "
+                if bf < 100:
+                    ref_line += f"{bf:>8.5f} Hz{mark} "
+                elif bf < 1000:
+                    ref_line += f"{bf:>8.4f} Hz{mark} "
+                elif bf < 10000:
+                    ref_line += f"{bf:>8.3f} Hz{mark} "
+                else:
+                    ref_line += f"{bf:>8.2f} Hz{mark} "
 
             status_text1.set_text(line1)
             status_text2.set_text(line2)
