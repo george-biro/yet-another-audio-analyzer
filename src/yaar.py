@@ -713,7 +713,7 @@ def main() -> int:
 
         prev_carrier_idx = -1
         stable_count = 0
-        write_after = 10
+        write_after = 20
 
         t_start = time.time()
         while (time.time() - t_start < cfg.duration_s) and not closed["value"]:
