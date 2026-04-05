@@ -96,11 +96,11 @@ Modern $4700\,\mu\mathrm{F} / 35\,\mathrm{V}$ capacitors are significantly small
 	\label{tab:rectifier_voltages}
 	\begin{tabular}{|l|l|l|l|}
 		\hline
-		\textbf{Ref.} & \textbf{B} & \textbf{C} & \textbf{E} \\
+		\textbf{Ref.} & \textbf{B} & \textbf{E} & \textbf{C} \\
     \hline
-    Q1 &  12.83V & 30.4V  &   12.16V \\
+    Q1 &  12.83V  &   12.16V & 30.4V  \\
     \hline
-    Q2 &  25.6V & 29.99V &  24.95V \\
+    Q2 &  25.6V  &  24.95V & 29.99V\\
     \hline
 	\end{tabular}
 \end{table}
@@ -119,18 +119,24 @@ Modern $4700\,\mu\mathrm{F} / 35\,\mathrm{V}$ capacitors are significantly small
         \hline
         B1+ &  +30.55V (120mV ripple) \\
         \hline
-        B1- &  -30.59  (120mV ripple) \\
+        B1- &  -30.59V  (120mV ripple) \\
         \hline
         B2+ &  +30.55V (120mV ripple) \\
         \hline
         B2- &  -30.55V (120mV ripple) \\
         \hline
-        B3+ & 12.16V \\
+        B3+ & +12.16V \\
         \hline
-        B4+ & 24.95V \\
+        B4+ & +24.95V \\
         \hline
 	\end{tabular}
 \end{table}
+
+The measured power supply voltages were compared with the values specified in the service manual. According to the documentation, the expected voltages are $\pm 28.5\,\mathrm{V}$ for the main rails, $+12.5\,\mathrm{V}$ for the low-voltage supply, and $+25.4\,\mathrm{V}$ for the preamplifier supply.
+
+The measured values were $\pm 30.5\,\mathrm{V}$, $+12.16\,\mathrm{V}$, and $+24.95\,\mathrm{V}$, respectively. The slightly elevated main supply rails (approximately $+2\,\mathrm{V}$) are attributed to variations in mains voltage and are typical for unregulated power supplies.
+
+All measured voltages are well within the $\pm 15\%$ tolerance specified in the service manual. These results indicate correct operation of the power supply and confirm that no faults are present in this section.
 
 \section{Equalizer Amp}
 
@@ -164,18 +170,20 @@ Due to the known reliability issues associated with the 2SC1344 transistors, all
 	\label{tab:eq_amp_voltages}
 	\begin{tabular}{|l|l|l|l|}
     \hline
- \textbf{Ref.} & \textbf{B} & \textbf{C} & \textbf{E} \\
+ \textbf{Ref.} & \textbf{B} & \textbf{E} & \textbf{C} \\
     \hline
-    Q701 & 590mV  & 1.678  & 31.9mV   \\
+    Q701 & 590mV  & 31.9mV  & 1.678V   \\
     \hline
-    Q702 & 595mV  & 1.688  & 35mV   \\
+    Q702 & 595mV   & 35mV  & 1.688V  \\
     \hline
-    Q703 & 1.67  & 8.5  &  1.04  \\
+    Q703 & 1.67V  &  1.04V  & 8.5V  \\
     \hline
-    Q704 & 1.68  & 10.35  & 1.03   \\
+    Q704 & 1.68V  & 1.03V  & 10.35V   \\
     \hline
 	\end{tabular}
 \end{table}
+
+The measured voltages were generally consistent with the service manual. However, the published emitter voltage for Q701/Q702 appears to be erroneous, since the listed base-emitter difference would be unrealistically low for a silicon transistor. The measured values are physically more plausible and consistent with normal transistor operation.
 
 \section{Tone/Pre Amp Board}
 
@@ -208,22 +216,24 @@ Due to the known reliability issues associated with the 2SC1344 transistors, all
 	\label{tab:tone_amp_voltages}
 	\begin{tabular}{|l|l|l|l|}
     \hline
- \textbf{Ref.} & \textbf{B} & \textbf{C} & \textbf{E} \\
+ \textbf{Ref.} & \textbf{B} & \textbf{E} & \textbf{C} \\
     \hline
-    Q501 & 4.11V & 24.95V &   3.55V  \\
+    Q501 & 4.11V  &   3.55V & 24.95V  \\
     \hline
-    Q502 & 4.20V & 24.95V  &   3.61V  \\
+    Q502 & 4.20V  &   3.61V  & 24.95V \\
     \hline
-    Q503 & 604mV & 5.75V  &  33.7mV  \\
+    Q503 & 604mV  &  33.7mV & 5.75V  \\
     \hline
-    Q504 & 603mV & 5.82V &  32.9mV  \\
+    Q504 & 603mV  &  32.9mV & 5.82V \\
     \hline
-    Q505 & 5.79V & 24.88V  & 5.23V \\
+    Q505 & 5.79V   & 5.23V & 24.88V \\
     \hline
-    Q506 & 5.86V & 24.91V  &  5.27V \\
+    Q506 & 5.86V  &  5.27V & 24.91V \\
     \hline
 	\end{tabular}
 \end{table}
+
+The measured voltages on the Tone/Pre Amp board were compared with the service manual values and were found to be in very good agreement. All transistor operating points are within the stated tolerance of the manual and are consistent with normal silicon transistor bias conditions. In particular, the base-emitter voltage differences are physically plausible and the collector voltages closely match the expected supply-related values. These results confirm correct operation of the tone and preamplifier section after restoration.
 
 \section{Main Amp Board}
 
@@ -245,7 +255,7 @@ No direct modern equivalent for the 2SC1030C is available. The device was not re
 		\hline
 		Q401,Q402,Q403,Q404,Q405,Q406 & 2SC1345F & KSC1845F (onsemi, $h_{FE} \approx 450$) \\
         \hline
-        Q407,Q408,Q415,Q116 & 2SC1509R & TTC004B.Q (Toshiba, $h_{FE} \approx$ 180) \\
+        Q407,Q408,Q415,Q416 & 2SC1509R & TTC004B.Q (Toshiba, $h_{FE} \approx$ 180) \\
         \hline
         Q409,Q410,Q413,Q414 & 2SA777R & TTA004B.Q (Toshiba, $h_{FE} \approx$ 180)\\
         \hline
@@ -270,50 +280,52 @@ No direct modern equivalent for the 2SC1030C is available. The device was not re
 	\label{tab:main_amp_voltages}
 	\begin{tabular}{|l|l|l|l|}
     \hline
- \textbf{Ref.} & \textbf{B} & \textbf{C} & \textbf{E} \\
+ \textbf{Ref.} & \textbf{B} & \textbf{E} & \textbf{C} \\
     \hline
-    Q401 & -66.8mV  & 29.48V  & -0.682V   \\
+    Q401 & -66.8mV  & -0.682V  & 29.48V   \\
     \hline
-    Q402 & -68.3mV  & 29.9V  & -0.675V   \\
+    Q402 & -68.3mV  & -0.675V   & 29.9V  \\
     \hline
-    Q403 & -58.2mV  & 30.05V  &  -0.67V  \\
+    Q403 & -58.2mV  &  -0.67V  & 30.05V  \\
     \hline
-    Q404 & -65.3mV & 29.9V &  -0.67V   \\
+    Q404 & -65.3mV  &  -0.67V  & 29.9V \\
     \hline
-    Q405 & -28.7V  & -0.66V & -29.3V   \\
+    Q405 & -28.7V  & -29.3V  & -0.66V  \\
     \hline
-    Q406 & -28.9V  & -0.65V  & -29.3V    \\
+    Q406 & -28.9V  & -29.3V   & -0.65V   \\
     \hline
-    Q407 & -29.6V  &  -0.72V &  -30.2V  \\
+    Q407 & -29.6V  &  -30.2V  &  -0.72V \\
     \hline
-    Q408 & -29.6V  &  -0.72V & -30.2V   \\
+    Q408 & -29.6V  & -30.2V  &  -0.72V  \\
     \hline
-    Q409 & 30.2V  &  1.22V &  29.6V  \\
+    Q409 & 30.2V  &  29.6V  &  1.22V \\
     \hline
-    Q410 & 30.2V  &  1.22V &  29.7V  \\
+    Q410 & 30.2V  &  29.7V  &  1.22V \\
     \hline
-    Q421 & -57mV  & 1.22V  &  -0.75V  \\
+    Q421 & -57mV  &  -0.75V  & 1.22V  \\
     \hline
-    Q422 & -54mV  & 1.25V  & -0.74V   \\
+    Q422 & -54mV  & -0.74V   & 1.25V  \\
     \hline
-    Q413 & -149mV  & -30.06V  &   -0.72V \\
+    Q413 & -149mV   &   -0.72V & -30.06V \\
     \hline
-    Q414 & -160mV  & -30.07V  &  -0.73V  \\
+    Q414 & -160mV  &  -0.73V  & -30.07V  \\
     \hline
-    Q415 & 1.24V  & 30.5V  &  0.65V  \\
+    Q415 & 1.24V  &  0.65V  & 30.5V  \\
     \hline
-    Q416 & 1.25V  & 30.5V  & 0.66V    \\
+    Q416 & 1.25V   & 0.66V  & 30.5V   \\
     \hline
-    Q417 &  0.65V & 30.5V  & 42mV   \\
+    Q417 &  0.65V  & 42mV  & 30.5V  \\
     \hline
-    Q418 & 0.66V  & 30.5V & 45mV   \\
+    Q418 & 0.66V  & 45mV   & 30.5V \\
     \hline
-    Q419 & -29.99V  & -10mV & -30.6V \\
+    Q419 & -29.99V  & -30.6V  & -10mV\\
     \hline
-    Q420 & -29.99V & -10mV & -30.6V \\
+    Q420 & -29.99V  & -30.6V & -10mV\\
     \hline
 	\end{tabular}
 \end{table}
+
+The measured voltages on the Main Amp board were compared with the service manual and were found to be in good agreement overall. The measured operating points preserve the expected symmetry of the complementary output stage, and the base-emitter voltage differences are consistent with normal silicon transistor operation. Small deviations from the nominal values are attributable to the slightly elevated supply rails and remain within the tolerance specified in the manual. These results confirm correct biasing and normal operation of the main amplifier stage after restoration.
 
 \section{Tuner Section}
 
