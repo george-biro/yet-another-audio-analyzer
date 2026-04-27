@@ -1,6 +1,8 @@
 \documentclass[]{article}
 \usepackage{graphicx}
 \usepackage{float}
+\usepackage{hyperref}
+
 
 %opening
 \title{Renovation of Yamaha CA-800 II}
@@ -20,6 +22,14 @@ The purchase price was 230 EUR plus shipping.
 Initially, the unit was operational, but the sound was not completely clean, and the feet were missing.
 All switches and potis were cleaned using Tesanol 26026. The power supply lamp was replaced, as it was broken.
 
+\section{Disclaimer}
+
+This document is provided for informational purposes only. While every effort has been made to ensure the accuracy and completeness of the information contained herein, the author assumes no responsibility or liability for any errors, omissions, or inaccuracies.
+
+All modifications, repairs, and measurements described in this document are performed at the reader's own risk. The author shall not be held liable for any damage to equipment, property, or personal injury resulting from the use or application of the information provided.
+
+All replacement components were tested prior to installation; however, no warranty, express or implied, is given regarding their performance, reliability, or suitability for any particular purpose.
+
 \section{Measurement and Test Equipment}
 
 \begin{table}[H]
@@ -30,16 +40,21 @@ All switches and potis were cleaned using Tesanol 26026. The power supply lamp w
 		\hline
 		\textbf{Instrument Type} & \textbf{Model} \\
 		\hline
-		Signal Generator & UNI-T UTG932E \\
 		AD Converter & E1DA COSMOS ADC ISO Grade B (ES9822Pro, 32-bit, 768\,kHz) \\
 		LCR Meter & DER EE DE-5000 \\
-		Oscilloscope & Hameg HM303-4 \\
-		Multimeter & UNI-T UT980C \\
 		Line-Phono Converter & OMNITRONIC LH-042 \\
-		VAOhm Meter & Philips PM2503 \\
+		Multimeter & UNI-T UT980C \\
+		Oscilloscope & Hameg HM303-4 \\
+		Signal Generator & UNI-T UTG932E \\
+		VA/Ohm Meter & Philips PM2503 \\
+        Transistor Tester & Peak Atlas DCA55 \\
 		\hline
 	\end{tabular}
 \end{table}
+
+The FFT analysis was performed using a custom-developed tool (YAAR) \cite{yaar}, which provides high-resolution spectral analysis and distortion metrics.
+
+
 
 \section{Power Supply}
 
@@ -517,5 +532,11 @@ plt.tight_layout()
 plt.savefig("riaa.pdf")
 plt.show()
 \end{verbatim}
+
+\begin{thebibliography}{9}
+
+\bibitem{yaar}
+G.~Biro, \textit{Yet Another Audio Analyzer (YAAR)}, GitHub repository, 2026. Available: \url{https://github.com/george-biro/yet-another-audio-analyzer}
+\end{thebibliography}
 
 \end{document}
