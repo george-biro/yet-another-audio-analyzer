@@ -1,0 +1,521 @@
+\documentclass[]{article}
+\usepackage{graphicx}
+\usepackage{float}
+
+%opening
+\title{Renovation of Yamaha CA-800 II}
+\author{George Biro}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+
+\end{abstract}
+
+\section{Intoduction}
+
+The purchase price was 230 EUR plus shipping.
+Initially, the unit was operational, but the sound was not completely clean, and the feet were missing.
+All switches and potis were cleaned using Tesanol 26026. The power supply lamp was replaced, as it was broken.
+
+\section{Measurement and Test Equipment}
+
+\begin{table}[H]
+	\centering
+	\caption{Measurement and Test Equipment Used}
+	\label{tab:tools}
+	\begin{tabular}{ll}
+		\hline
+		\textbf{Instrument Type} & \textbf{Model} \\
+		\hline
+		Signal Generator & UNI-T UTG932E \\
+		AD Converter & E1DA COSMOS ADC ISO Grade B (ES9822Pro, 32-bit, 768\,kHz) \\
+		LCR Meter & DER EE DE-5000 \\
+		Oscilloscope & Hameg HM303-4 \\
+		Multimeter & UNI-T UT980C \\
+		Line-Phono Converter & OMNITRONIC LH-042 \\
+		VAOhm Meter & Philips PM2503 \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\section{Power Supply}
+
+Random spike noises were observed on the power supply output.
+The voltages at the emitters of TR701 and TR704 were measured at +50\,V and -50\,V respectively.
+Zener diodes D703, D704, D705, and D706 had previously been replaced by a third party, changing the original 31 V and 21 V types to 30 V and 20 V types. In general, this modification does not appear to have introduced any issues.
+Low hFE was observed in TR701 and TR704, and these transistors were replaced with BD139 and BD140 devices. An additional cooling board was installed, and mechanical reinforcement of the main board was implemented to support it.
+Capacitors C705–C708 were replaced with Panasonic EEU-FS2A221 units, as the original capacitors exhibited significantly reduced capacitance (approximately 140 µF). Capacitors C709 and C710 were replaced with Panasonic EEUFR1J101L units.
+Transistors TR705, TR707, and TR709 (2SC458) were replaced with KSC1845F devices.
+Following these modifications, complete stability of the power supply was achieved.
+
+\section{Function Board}
+
+The function board contains the phono preamplifier and input selection circuitry. Some hum was present on this board. The capacitance and ESR of all electrolytic capacitors were measured, and any capacitor was replaced if a new component provided significantly lower ESR.
+
+Modifications were required because the replacement transistors exhibit different internal capacitances. Circuit simulations indicated significant deviations when these transistors were used with the \textit{Technics EPC-207C} moving-magnet cartridge. In addition, the original configuration resulted in unsatisfactory sound quality.
+
+Given that the EPC-207C cartridge has an inductance of approximately 400\,mH and an internal resistance of approximately 400\,$\Omega$, the modified RIAA resistor–capacitor network exhibits very low phase and gain errors. As a result, the overall sound quality was significantly improved. The modification was also simulated, and the results are shown in fig. \ref{fig:simu}.
+
+\paragraph{Documentation Note}
+At positions R409, R410, R427, and R428, the installed resistors were verified to be original components. Measured resistance values of 4.7\,k$\Omega$ (R409 and R410) and 330\,$\Omega$ (R427 and R428) were confirmed by both direct measurement and resistor color coding. The values specified in the official schematic differ from those observed and do not appear to be electrically consistent with correct circuit operation. A documentation error in the schematic is therefore suspected.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{figures/yamaha-ca-800-phono.pdf}
+	\caption{Schematics for simulation}
+	\label{fig:simu}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{figures/riaa.pdf}
+	\caption{Simulation of the phono preamplifier with a 400\,mH cartridge using the modified component values.}
+	\label{fig:simu}
+\end{figure}
+
+\begin{table}[H]
+	\centering
+	\caption{Function Board Repair Log}
+	\label{tab:repair_log_function_board}
+	\begin{tabular}{|l|l|l|}
+		\hline
+		\textbf{Ref.} & \textbf{Original} & \textbf{Replacement} \\
+		\hline
+		TR401, TR402 & 2SC1345 & BC550C (HFE $\approx$ 600) \\
+		TR403, TR404 & 2SC1345 & KSC1845 (HFE $\approx$ 400) \\
+		TR405, TR406 & 2SC1345 & BC550C (HFE $\approx$ 600) \\
+		TR407, TR408 & 2SC1166 & BC546C (HFE $\approx$ 600) \\
+		\hline
+		C405, C406 & 100\,pF & 3\,pF \\
+		C407, C408 & 3\,pF & 47\,pF \\
+		C409, C410 & 3\,pF & 47\,pF \\
+		C411, C412 &   & 47\,$\mu$F / 25\,V (Kemet A750EK476M1EAAE040) \\
+		C401, C402 &   & 10\,$\mu$F / 25\,V (Kemet A758BG106M1EAAE070) \\
+		C403, C404 &   & 10\,$\mu$F / 25\,V (Kemet A758BG106M1EAAE070) \\
+		C413, C414 & 5000\,pF & 3300\,pF \\
+		C415, C416 & 18\,nF & 12\,nF \\
+		C417, C418 & 4.7\,$\mu$F & 1\,$\mu$F / 50\,V (Kemet ESC105M050AC3AA) \\
+		C241 &   & 220\,$\mu$F / 50\,V (Panasonic EEU-FR1H221B) \\
+		\hline
+		R413, R414 & 15\,k$\Omega$ & 18\,k$\Omega$ \\
+		R415, R416 & 180\,k$\Omega$ & 330\,k$\Omega$ \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\section{Tone control board}
+
+The capacitance and ESR of all electrolytic capacitors were measured, and any capacitor was replaced if a new component provided significantly lower ESR.
+
+\begin{table}[H]
+	\centering
+	\caption{Tone Control Board Repair Log}
+	\label{tab:repair_log_tone_control_board}
+	\begin{tabular}{|l|l|l|}
+		\hline
+		\textbf{Ref.} & \textbf{Original} & \textbf{Replacement} \\
+		\hline
+		TR301, TR302 & 2SC1345D & KSC1845F (HFE $\approx$ 400) \\
+		TR305..TR308 & 2SC1345D & KSC1845F (HFE $\approx$ 400) \\
+		\hline
+		C347 &  &   220\,$\mu$F / 50\,V (Panasonic EEU-FR1H221B) \\
+		C325, C325& & 10\,$\mu$F / 25\,V (Kemet A758BG106M1EAAE070) \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\section{Filter Board}
+
+The capacitance and ESR of all electrolytic capacitors were measured, and any capacitor was replaced if a new component provided significantly lower ESR.
+
+\begin{table}[H]
+	\centering
+	\caption{Filter Board Repair Log}
+	\label{tab:repair_log_filter_board}
+	\begin{tabular}{|l|l|l|}
+		\hline
+		\textbf{Ref.} & \textbf{Original} & \textbf{Replacement} \\
+		\hline
+		TR501, TR502 & 2SC1345D & KSC1845F (HFE $\approx$ 400) \\
+		TR505, TR506 & 2SC1345D & KSC1845F (HFE $\approx$ 400) \\
+		\hline
+		C526 &  &   220\,$\mu$F / 50\,V (Panasonic EEU-FR1H221B) \\
+		C325, C325& & 10\,$\mu$F / 25\,V (Kemet A758BG106M1EAAE070) \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\section{Final Measurements}
+
+\subsection{Phono Stage}
+
+The signal generator was set to an output level of 450\,mV\textsubscript{rms} and connected to the input of the inverse RIAA converter, the output of which was connected to the Phono~1 input of the amplifier. An 8\,\(\Omega\) load resistor was connected to the amplifier output, and the volume control was adjusted to correspond to an output power of approximately 45\,W. The same input voltage and volume setting were applied at all test frequencies.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_phono_left_41Hz.pdf}
+	\caption{Phono 41Hz Left}
+	\label{fig:phono_41Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_phono_left_1014Hz.pdf}
+	\caption{Phono 1kHz Left}
+	\label{fig:phono_1khz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_phono_left_10154Hz.pdf}
+	\caption{Phono 10kHz Left}
+	\label{fig:phono_10khz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_phono_right_41Hz.pdf}
+	\caption{Phono 41Hz Right}
+	\label{fig:phono_41Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_phono_right_1014Hz.pdf}
+	\caption{Phono 1kHz Right}
+	\label{fig:phono_1khz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_phono_right_10154Hz.pdf}
+	\caption{Phono 10kHz Right}
+	\label{fig:phono_10khz_right}
+\end{figure}
+
+\subsection{Aux}
+
+The signal generator was set to an output level of 250\,mV\textsubscript{rms} and connected to the AUX1 input of the amplifier. An 8\,\(\Omega\) load resistor was connected to the amplifier output, and the volume control was adjusted to correspond to an output power of approximately 45\,W. The same input voltage and volume setting were applied at all test frequencies.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_aux_left_100Hz.pdf}
+	\caption{Aux 100Hz Left}
+	\label{fig:aux_100Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_aux_left_1014Hz.pdf}
+	\caption{Aux 1kHz Left}
+	\label{fig:aux_1khz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_aux_left_10154Hz.pdf}
+	\caption{Aux 10kHz Left}
+	\label{fig:aux_10khz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_aux_right_100Hz.pdf}
+	\caption{Aux 100Hz Right}
+	\label{fig:aux_100Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_aux_right_1014Hz.pdf}
+	\caption{Aux 1kHz Right}
+	\label{fig:aux_1khz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_aux_right_10154Hz.pdf}
+	\caption{Aux 10kHz Right}
+	\label{fig:aux_10khz_right}
+\end{figure}
+
+\section{Appendix I: Phone NGSpice simulation}
+
+\begin{verbatim}
+	.title KiCad schematic
+	* Official onsemi/Fairchild BC549/550, adjusted for BC550C-like gain
+	.param C405val = 47p
+	.param C407val = 3p
+	.param C409val = 3p
+	
+	.model BC550C NPN (
+	+ LEVEL=1
+	+ IS=2.24183E-14 NF=0.996496 ISE=1.90217E-14 NE=2
+	+ BF=600 IKF=0.211766 VAF=161.939
+	+ NR=0.993 ISC=4.7863E-15 NC=0.996
+	+ BR=12.1807 IKR=0.3423 VAR=123.229
+	+ RB=167.033 IRB=7.079458E-05 RBM=1.12256
+	+ RE=0.036 RC=0.79
+	+ XTB=1.65 EG=1.1737 XTI=3
+	+ CJE=1.87E-11 VJE=0.732 MJE=0.33
+	+ CJC=6.16E-12 VJC=0.395 MJC=0.251 XCJC=0.6192 FC=0.5
+	+ TF=518.15E-12 XTF=10 VTF=10 ITF=1 TR=10.000E-9 )
+	
+	.model KSC1845F npn (
+	+ IS=5.075431E-13 BF=400 NF=1
+	+ BR=0.365 NR=1 ISE=1.68107E-12 NE=2.0
+	+ ISC=1.8378E-12 NC=1.5
+	+ VAF=82.803 VAR=100 IKF=0.20596 IKR=0.0190546
+	+ RB=107 RBM=0.292 IRB=1.258925E-6
+	+ RE=0.15 RC=0.28
+	+ CJE=1.10447E-11 VJE=0.7300286 MJE=0.1619943 FC=0.5
+	+ CJC=5.625739E-12 VJC=0.45 MJC=0.3059045
+	+ XTB=1.7281 EG=1.1809 XTI=3
+	+ TF=1.108e-9 XTF=2.250 ITF=0.0044 VTF=4.0 TR=1.0e-8 )
+	
+	R439 /TR405E Net-_C411-Pad1_ 47
+	R429 /TR407E 0 2.2k
+	R427 Net-_R411-Pad2_ 0 330
+	C411 Net-_C411-Pad1_ 0 47u
+	R425 Net-_C411-Pad1_ Net-_R411-Pad2_ 1.5k
+	R411 /TR401B Net-_R411-Pad2_ 220k
+	QTR401 /TR401C_TR403B /TR401B /TR401E BC550C
+	R409 /TR401E 0 470
+	R413 /TR403E_TR405B 0 4.7k
+	R407 SUP /TR401C_TR403B 470k
+	QTR403 /TR403C_TR405C_TR407B /TR401C_TR403B /TR403E_TR405B KSC1845F
+	R201 Net-_C401-Pad1_ 0 100k
+	R401 Net-_C401-Pad1_ 0 820k
+	R403 Net-_C401-Pad2_ 0 220k
+	C401 Net-_C401-Pad1_ Net-_C401-Pad2_ 10u
+	R443 Net-_C419-Pad1_ /TR407E 220
+	C419 Net-_C419-Pad1_ Net-_C415-Pad2_ 1u
+	R441 Net-_C425-Pad2_ 0 27k
+	C425 Net-_C425-Pad1_ Net-_C425-Pad2_ 10u
+	QTR407 /TR407C /TR403C_TR405C_TR407B /TR407E BC550C
+	R433 Net-_C415-Pad2_ 0 100k
+	R431 SUP /TR407C 10
+	QTR405 /TR403C_TR405C_TR407B /TR403E_TR405B /TR405E BC550C
+	R423 SUP /TR403C_TR405C_TR407B 4.7k
+	R421 /TR401E Net-_C425-Pad1_ 27k
+	C403 Net-_C403-Pad1_ Net-_C401-Pad2_ 4.7u
+	R405 Net-_C403-Pad1_ Net-_C405-Pad2_ 1k
+	R419 Net-_C405-Pad2_ /TR401B 1.2k
+	C417 /TR407C 0 0.1u
+	R435 /TR407E Net-_C421-Pad1_ 2.2k
+	C421 Net-_C421-Pad1_ OUT 1u
+	Rload1 OUT 0 100k
+	
+	C407 /TR401B /TR401E {C407val}
+	C409 /TR401C_TR403B /TR403C_TR405C_TR407B {C409val}
+	C405 0 Net-_C405-Pad2_ {C405val}
+	
+	Ccable1 Net-_C401-Pad1_ 0 140p
+	*Gardo
+	*Rcart1 IN Net-_Lcart1-Pad1_ 470
+	*Lcart1 Net-_Lcart1-Pad1_ Net-_C401-Pad1_ 60m
+	*Technics
+	Rcart1 IN Net-_Lcart1-Pad1_ 400
+	Lcart1 Net-_Lcart1-Pad1_ Net-_C401-Pad1_ 400m
+	
+	* HF damping branch (tune these)
+	*Rhd  Net-_C401-Pad1_ n_hd 22k
+	*Chd  n_hd 0 220p
+	
+	
+	*C413 /TR401E Net-_C413-Pad2_ 5000p
+	*R415 /TR401E Net-_C413-Pad2_ 15k
+	*C415 Net-_C413-Pad2_ Net-_C415-Pad2_ 18000p
+	*R417 Net-_C413-Pad2_ Net-_C419-Pad1_ 180k
+	
+	C413 /TR401E Net-_C413-Pad2_ 3300p
+	R415 /TR401E Net-_C413-Pad2_ 18k
+	C415 Net-_C413-Pad2_ Net-_C415-Pad2_ 12000p
+	R417 Net-_C413-Pad2_ Net-_C419-Pad1_ 330k
+	
+	V1 SUP 0 51 
+	V2 IN 0 AC 0.004
+	RLoad OUT 0 47k
+	Rleak_IN IN 0 100Meg 
+	Rleak_OUT OUT 0 100Meg
+	
+	.control
+	set filetype=ascii
+	op
+	print v(/TR401B) v(/TR401C_TR403B) v(/TR401E) v(/TR403C_TR405C_TR407B) v(/TR403E_TR405B) v(/TR405E) v(/TR407E)
+	
+	* =========================================================
+	* AC analysis
+	* =========================================================
+	ac dec 300 10 50k
+	
+	* =========================================================
+	* Export raw data for Python
+	* =========================================================
+	wrdata sim_ac.csv frequency v(out) v(in)
+	quit
+	.endc
+	
+	.end
+\end{verbatim}
+
+\section{Appendix II: RIAA comparsion}
+
+\begin{verbatim}
+import numpy as np
+import matplotlib.pyplot as plt
+import subprocess
+import argparse
+import sys
+
+class CustomHelpFormatter(argparse.HelpFormatter):
+def _get_help_string(self, action):
+help = action.help
+if action.default is not argparse.SUPPRESS:
+help += f' (default: {action.default})'
+return help
+
+# Begin of the program
+parser = argparse.ArgumentParser(
+prog='Yet Another Audio Analyzer',
+usage='%(prog)s [options]',
+formatter_class=CustomHelpFormatter)
+
+parser.add_argument("--psfile", type=str, default="pspice-yamaha-ca800-phono.cir")
+parser.add_argument("--acfile", type=str, default="sim_ac.csv")
+parser.add_argument(
+"--param",
+action="append",
+default=[],
+help="ngspice parameter definition (passed as --define=...)"
+)
+args = parser.parse_args()
+cmd = [
+"ngspice",
+"-b"]
+
+for p in args.param:
+cmd.append(f"--define={p}")
+cmd.append(args.psfile)
+print(cmd)
+
+subprocess.run(cmd, check=True)
+
+# ============================================================
+# Load ngspice wrdata CSV (Mac format: all vectors are complex)
+#
+# Columns:
+# 0 : freq (real)
+# 1 : Re(freq)   [ignore]
+# 2 : Im(freq)   [ignore]
+# 3 : freq (vout) [ignore]
+# 4 : Re(Vout)
+# 5 : Im(Vout)
+# 6 : freq (vin)  [ignore]
+# 7 : Re(Vin)
+# 8 : Im(Vin)
+# ============================================================
+data = np.loadtxt(args.acfile)
+
+freq = data[:, 0]                       # Hz
+Vout = data[:, 4] + 1j * data[:, 5]
+Vin  = data[:, 7] + 1j * data[:, 8]
+
+# H = Vin / Vout
+H = Vout / Vin
+
+mag_db = 20 * np.log10(np.abs(H))
+phase_deg = np.unwrap(np.angle(H)) * 180 / np.pi
+
+
+# ============================================================
+# Exact RIAA PLAYBACK (de-emphasis) transfer function
+# ============================================================
+
+# RIAA time constants:
+# 3180 µs → 50.05 Hz
+# 318  µs → 500.5 Hz
+# 75   µs → 2122 Hz
+
+f1 = 50.05     # Hz
+f2 = 500.5     # Hz
+f3 = 2122.0    # Hz
+
+w = 2 * np.pi * freq
+w1 = 2 * np.pi * f1
+w2 = 2 * np.pi * f2
+w3 = 2 * np.pi * f3
+
+# Playback (DE-emphasis)
+H_riaa = (1 + 1j*w/w2) / ((1 + 1j*w/w1) * (1 + 1j*w/w3))
+
+mag_db_riaa = 20 * np.log10(np.abs(H_riaa))
+phase_deg_riaa = np.unwrap(np.angle(H_riaa)) * 180 / np.pi
+
+# ============================================================
+# Normalize MAGNITUDE and PHASE at 1 kHz (RIAA reference)
+# ============================================================
+
+idx_1k = np.argmin(np.abs(freq - 1000))
+
+# Magnitude normalization
+mag_offset_db = mag_db[idx_1k] - mag_db_riaa[idx_1k]
+mag_db_riaa_offset = mag_db_riaa + mag_offset_db
+
+# Phase normalization
+phase_offset = phase_deg[idx_1k] - phase_deg_riaa[idx_1k]
+phase_deg_riaa_offset = phase_deg_riaa + phase_offset
+
+mag_err = mag_db - mag_db_riaa_offset
+phase_err = phase_deg - phase_deg_riaa_offset
+
+print("Errors")
+for f in [100, 500, 1000, 2000, 5000, 10000, 20000]:
+idx_f = np.argmin(np.abs(freq - f))
+print(f"{mag_err[idx_f]:8.2f}dB {phase_err[idx_f]:8.2f}deg @ {f:8.0f}Hz") 
+
+
+# ============================================================
+# Combined magnitude + phase figure
+# ============================================================
+
+fig, (ax_mag, ax_phase) = plt.subplots(
+2, 1, figsize=(11, 7), sharex=True
+)
+
+# ----------------------------
+# Magnitude response subplot
+# ----------------------------
+ax_mag.semilogx(freq, mag_db, label="Simulated Circuit")
+ax_mag.semilogx(
+freq, mag_db_riaa_offset, "--",
+label="RIAA Playback (aligned @ 1 kHz)"
+)
+ax_mag.set_ylabel("Magnitude [dB]")
+ax_mag.set_title("Yamaha CA-800 II Phono – RIAA Playback Accuracy")
+ax_mag.grid(True, which="both", ls="--")
+ax_mag.legend()
+
+# ----------------------------
+# Phase response subplot
+# ----------------------------
+ax_phase.semilogx(freq, phase_deg, label="Simulated Circuit Phase")
+ax_phase.semilogx(
+freq, phase_deg_riaa_offset, "--",
+label="RIAA Playback Phase (aligned @ 1 kHz)"
+)
+ax_phase.set_xlabel("Frequency [Hz]")
+ax_phase.set_ylabel("Phase [degrees]")
+ax_phase.set_title("Phase Response Comparison (1 kHz aligned)")
+ax_phase.grid(True, which="both", ls="--")
+ax_phase.legend()
+
+plt.tight_layout()
+plt.savefig("riaa.pdf")
+plt.show()
+\end{verbatim}
+
+\end{document}
