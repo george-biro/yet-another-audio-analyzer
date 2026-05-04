@@ -1,0 +1,639 @@
+\documentclass[]{article}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+
+%opening
+\title{Renovation of Harman Kardon 430 Twin}
+\author{George Biro}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This work presents the restoration and performance evaluation of a Harman Kardon 430 Twin receiver. The unit was refurbished by replacing known failure-prone semiconductor devices and aging passive components, followed by verification of operating points across all major circuit blocks.
+
+Comprehensive electrical measurements were carried out to assess the performance of the phono and auxiliary (AUX) input stages. Frequency-domain analysis based on high-resolution FFT techniques was used to evaluate total harmonic distortion (THD), signal-to-noise ratio (SNR), and intermodulation distortion (IMD) over a wide frequency range.
+
+The results show that the restored unit achieves low distortion levels, with the AUX input demonstrating superior performance due to its simpler signal path and lower gain. The phono stage exhibits slightly higher noise and distortion, as expected from its equalization and amplification requirements, but remains within acceptable limits for high-fidelity reproduction.
+
+Overall, the measurements confirm that the restoration successfully returns the receiver to stable and reliable operation, with performance characteristics consistent with its original design.
+
+\end{abstract}
+
+\section{Introduction}
+
+The unit was purchased for 100\,EUR plus shipping.  
+Initially, it was operational; however, sound quality exhibited noticeable distortion and noise artifacts.
+All switches and potentiometers were cleaned using Tesanol 26026 contact cleaner.
+
+\section{Disclaimer}
+
+This document is provided for informational purposes only. While every effort has been made to ensure the accuracy and completeness of the information contained herein, the author assumes no responsibility or liability for any errors, omissions, or inaccuracies.
+
+All modifications, repairs, and measurements described in this document are performed at the reader's own risk. The author shall not be held liable for any damage to equipment, property, or personal injury resulting from the use or application of the information provided.
+
+All replacement components were tested prior to installation; however, no warranty, express or implied, is given regarding their performance, reliability, or suitability for any particular purpose.
+
+\section{Measurement and Test Equipment}
+
+\begin{table}[H]
+	\centering
+	\caption{Measurement and Test Equipment Used}
+	\label{tab:tools}
+	\begin{tabular}{ll}
+		\hline
+		\textbf{Instrument Type} & \textbf{Model} \\
+		\hline
+		AD Converter & E1DA COSMOS ADC ISO Grade B (ES9822Pro, 32-bit, 768\,kHz) \\
+		LCR Meter & DER EE DE-5000 \\
+		Line-Phono Converter & OMNITRONIC LH-042 \\
+		Multimeter & UNI-T UT980C \\
+		Oscilloscope & Hameg HM303-4 \\
+		Signal Generator & UNI-T UTG932E \\
+		VA/Ohm Meter & Philips PM2503 \\
+        Transistor Tester & Peak Atlas DCA55 \\
+		\hline
+	\end{tabular}
+\end{table}
+
+The FFT analysis was performed using a custom-developed tool (YAAR) \cite{yaar}, which provides high-resolution spectral analysis and distortion metrics.
+
+\section{Power Supply Boards}
+
+The voltage selector switch was set to the $240\,\mathrm{V}$ position.
+
+\begin{table}[H]
+	\centering
+	\caption{Power Supply Repair Log}
+	\label{tab:power_supply_log}
+	\begin{tabular}{|l|l|l|}
+		\hline
+		\textbf{Ref.} & \textbf{Original} & \textbf{Replacement} \\
+        \hline
+        C1,C15 & $1000\,\mu\mathrm{F} / 35\,\mathrm{V}$ & A758BG106M1EAAE070 \\
+        \hline
+        C2,C4 & $2200\,\mu\mathrm{F} / 35\,\mathrm{V}$ & A758EK226M1EAAE050 \\
+        \hline
+        C3 & $470\,\mu\mathrm{F} / 25\,\mathrm{V}$ & EEU-FC2A2R2H \\
+        \hline
+        C6,C7,C8,C9 & $4700\,\mu\mathrm{F} / 35\,\mathrm{V}$ & EKZN350ELL472MM40S \\
+        \hline
+        Q1, Q2 & 2SC1212C & BD139-16 (STmicro, $h_{FE} \approx 139$) \\
+        \hline
+	\end{tabular}
+\end{table}
+
+\begin{table}[H]
+	\centering
+	\caption{Rectifier Voltages}
+	\label{tab:rectifier_voltages}
+	\begin{tabular}{|l|l|l|l|}
+		\hline
+		\textbf{Ref.} & \textbf{B} & \textbf{E} & \textbf{C} \\
+    \hline
+    Q1 & 13.18\,V & 12.5\,V & 27.95\,V \\
+    \hline
+    Q2 & 24.75\,V & 24.1\,V & 27.5\,V \\
+    \hline
+	\end{tabular}
+\end{table}
+
+\begin{table}[H]
+	\centering
+	\caption{Power Supply Voltages}
+	\label{tab:power_supply_volt}
+	\begin{tabular}{|l|l|}
+		\hline
+		\textbf{Ref.} & \textbf{V} \\
+        \hline
+        LP3-LP4 & $42.1\,\mathrm{VAC}$ \\
+        \hline
+        LP5-LP6 & $42.1\,\mathrm{VAC}$ \\
+        \hline
+        B1+ & +28.00\,V (120\,mV ripple) \\
+        \hline
+        B1- & -27.95\,V (120\,mV ripple) \\
+        \hline
+        B2+ & +27.92\,V (120\,mV ripple) \\
+        \hline
+        B2- & -27.91\,V (120\,mV ripple) \\
+        \hline
+        B3+ & +12.50\,V \\
+        \hline
+        B4+ & +24.10\,V \\
+        \hline
+	\end{tabular}
+\end{table}
+
+The measured power supply voltages were compared with the values specified in the service manual. According to the documentation, the expected voltages are $\pm 28.5\,\mathrm{V}$ for the main rails, $+12.5\,\mathrm{V}$ for the low-voltage supply, and $+25.4\,\mathrm{V}$ for the preamplifier supply.
+
+The supply waveforms were also examined using a Hameg HM303-4 analog oscilloscope. No abnormal behavior was observed; the DC rails were stable and clean, and no excessive ripple, oscillation, or other irregularities were detected.
+
+All measured voltages are well within the $\pm 15\%$ tolerance specified in the service manual. These results indicate correct operation of the power supply and confirm that no faults are present in this section.
+
+\section{Equalizer Amp}
+
+Due to the known reliability issues associated with the 2SC1344 transistors, all devices of this type were replaced with KSC1845F equivalents.
+
+\begin{table}[H]
+	\centering
+	\caption{Equalizer Amp Repair Log}
+	\label{tab:eq_amp_log}
+	\begin{tabular}{|l|l|l|}
+		\hline
+		\textbf{Ref.} & \textbf{Original} & \textbf{Replacement} \\
+		\hline
+		Q701,Q702,Q703,Q704 & 2SC1344E & KSC1845F (onsemi, $h_{FE} \approx 450$) \\
+        \hline
+        C701,C702 & 10uF/16V & A758BG106M1EAAE070 \\
+        \hline
+        C705,C706 & 47uF/6.3V & EEU-FS2A470L \\
+        \hline
+        C711,C712 & 0.47uF/35V & R82EC3470AA70J \\
+        \hline
+        C717,C718 & 100uF/25V & EEU-FR1V101B \\
+        \hline
+	\end{tabular}
+\end{table}
+
+\begin{table}[H]
+	\centering
+	\caption{Equalizer Amp Voltages}
+	\label{tab:eq_amp_voltages}
+	\begin{tabular}{|l|l|l|l|}
+    \hline
+ \textbf{Ref.} & \textbf{B} & \textbf{E} & \textbf{C} \\
+    \hline
+    Q701 & 582mV  & 34mV  & 1.69V   \\
+    \hline
+    Q702 & 586mV   & 34.1mV  & 1.67V  \\
+    \hline
+    Q703 & 1.69V  &  1.063V  & 9.47V  \\
+    \hline
+    Q704 & 1.67V  & 1.044V  & 9.64V   \\
+    \hline
+	\end{tabular}
+\end{table}
+
+The equalizer amplifier voltages are generally in good agreement with the service manual. The base and emitter voltages closely match the specified values, confirming correct transistor bias conditions. A small deviation is observed in the collector voltage of Q703, which is lower than the nominal value given in the manual, while Q704 remains close to specification. Since the remaining node voltages are consistent and the measured phono-stage distortion performance is good, this deviation is not considered indicative of a functional fault.
+
+\section{Tone/Pre Amp Board}
+
+Due to the known reliability issues associated with the 2SC1344 transistors, all devices of this type were replaced with KSC1845F equivalents.
+
+\begin{table}[H]
+	\centering
+	\caption{Tone/Pre Amp Repair Log}
+	\label{tab:tone_amp_log}
+	\begin{tabular}{|l|l|l|}
+		\hline
+		\textbf{Ref.} & \textbf{Original} & \textbf{Replacement} \\
+		\hline
+		Q501,Q502,Q503,Q504,Q505,Q506 & 2SC1344E & KSC1845F (onsemi, $h_{FE} \approx 450$) \\
+        \hline
+        C503,C504 & 10uF/16V & A758BG106M1EAAE070 \\
+        \hline
+        C505,C506 & 22uF/10V & A758EK226M1EAAE050 \\
+        \hline
+        C513,C514 & 2.2uF/50V & EEU-FC2A2R2H \\
+        \hline
+        C517,C518 & 47uF/16V & A750EK476M1EAAE040 \\
+        \hline
+	\end{tabular}
+\end{table}
+
+\begin{table}[H]
+	\centering
+	\caption{Tone/Pre Amp Voltages}
+	\label{tab:tone_amp_voltages}
+	\begin{tabular}{|l|l|l|l|}
+    \hline
+    \textbf{Ref.} & \textbf{B} & \textbf{E} & \textbf{C} \\
+    \hline
+    Q501 & 4.15V  & 3.59V & 24.15V  \\
+    \hline
+    Q502 & 4.16V  & 3.55V & 24.15V \\
+    \hline
+    Q503 & 598mV  & 31mV & 5.56V  \\
+    \hline
+    Q504 & 600mV  & 32mV & 5.67V \\
+    \hline
+    Q505 & 5.56V  & 4.96V & 24.15V \\
+    \hline
+    Q506 & 5.67V  & 5.08V & 24.15V \\
+    \hline
+	\end{tabular}
+\end{table}
+
+The measured voltages on the Tone/Pre Amp board were compared with the service manual values and were found to be in very good agreement. All transistor operating points are within the stated tolerance of the manual and are consistent with normal silicon transistor bias conditions. In particular, the base-emitter voltage differences are physically plausible and the collector voltages closely match the expected supply-related values. These results confirm correct operation of the tone and preamplifier section after restoration.
+
+\section{Main Amp Board}
+
+Due to the well-known reliability issues associated with the 2SC1345F transistors, all devices of this type were replaced with KSC1845F equivalents.
+
+Several 2SC1509R and 2SA777 transistors exhibited a current gain ($h_{FE}$) below 60, which was considered indicative of degradation or failure. These devices were therefore replaced with high-quality modern equivalents (TTC004B.Q and TTA004B.Q).
+
+The 2SC458 transistors, which are also known for poor long-term reliability, were likewise replaced with KSC1845F devices.
+
+No direct modern equivalent for the 2SC1030C is available. The device was not removed from the circuit; however, in-circuit measurements indicated normal operation, and it was therefore retained.
+
+\begin{table}[H]
+	\centering
+	\caption{Main Amp Repair Log}
+	\label{tab:main_amp_log}
+	\begin{tabular}{|l|l|l|}
+		\hline
+		\textbf{Ref.} & \textbf{Original} & \textbf{Replacement} \\
+		\hline
+		Q401,Q402,Q403,Q404,Q405,Q406 & 2SC1345F & KSC1845F (onsemi, $h_{FE} \approx 450$) \\
+        \hline
+        Q407,Q408,Q415,Q416 & 2SC1509R & TTC004B.Q (Toshiba, $h_{FE} \approx$ 180) \\
+        \hline
+        Q409,Q410,Q413,Q414 & 2SA777R & TTA004B.Q (Toshiba, $h_{FE} \approx$ 180)\\
+        \hline
+        Q421,Q422 & 2SC458B & KSC1845F (onsemi, $h_{FE} \approx 450$)\\
+        \hline
+        C401,C402 & $47\,\mu\mathrm{F} / 16\,\mathrm{V}$ & R82EC3470AA70J  \\
+        \hline
+        C404,C405 & $220\,\mu\mathrm{F} / 16\,\mathrm{V}$  & A758KK227M1CAAE014 \\
+        \hline
+        C407,C408 & $1000\,\mu\mathrm{F} / 16\,\mathrm{V}$ & EEU-FS1H102L \\
+        \hline
+        D401,D402,D403,D404,D405,D406 & 1S2076 & 1N4148 (onsemi) \\
+        \hline
+        D407,D408 & SIB01-02 & 1N4007 (Vishay) \\
+        \hline
+	\end{tabular}
+\end{table}
+
+\begin{table}[H]
+	\centering
+	\caption{Main Amp Voltages}
+	\label{tab:main_amp_voltages}
+	\begin{tabular}{|l|l|l|l|}
+    \hline
+ \textbf{Ref.} & \textbf{B} & \textbf{E} & \textbf{C} \\
+    \hline
+    Q401 & -60.8mV  & -0.669V  & 26.29V   \\
+    \hline
+    Q402 & -62mV  & -0.671V   & 26.18V  \\
+    \hline
+    Q403 & -56mV  &  -0.67V  & 26.6V  \\
+    \hline
+    Q404 & -57.8mV  & -0.671V  & 26.5V \\   
+    \hline
+    Q405 & -25.6V  & -26.3V  & -0.68V  \\
+    \hline
+    Q406 & -25.7V  & -26.33V   & -0.67V   \\
+    \hline
+    Q407 & -26.29V  &  -26.89V  &  -0.76V \\
+    \hline
+    Q408 & -26.35V  & -26.95V  &  -0.75V  \\
+    \hline
+    Q409 & 26.33V  &  26.92V  &  1.23V \\
+    \hline
+    Q410 & 26.35V  &  26.93V  &  1.23V \\
+    \hline
+    Q421 & -76mV  &  -0.75V  & 1.24V  \\
+    \hline
+    Q422 & -90mV  & -0.76V   & 1.22V  \\
+    \hline
+    Q413 & -0.76mV   &  -0.173V & -26.9V \\
+    \hline
+    Q414 & -0.75mV  &  -0.16V  & -26.9V  \\
+    \hline
+    Q415 & 1.22V  &  0.63V  & 27.4V  \\
+    \hline
+    Q416 & 1.22V   & 0.63V  & 27.5V   \\
+    \hline
+    Q417 &  0.62V  & 30mV  & 27.4V  \\
+    \hline
+    Q418 & 0.62V  & 38mV   & 27.37V \\
+    \hline
+    Q419 & -26.7V  & -27.36V  & -11mV\\
+    \hline
+    Q420 & -26.8V  & -27.42V & -12mV\\
+    \hline
+	\end{tabular}
+\end{table}
+
+The measured voltages on the Main Amp board were compared with the service manual and were found to be in good agreement overall. The measured operating points preserve the expected symmetry of the complementary output stage, and the base-emitter voltage differences are consistent with normal silicon transistor operation. Small deviations from the nominal values are attributable to the slightly elevated supply rails and remain within the tolerance specified in the manual. These results confirm correct biasing and normal operation of the main amplifier stage after restoration.
+
+\section{Tuner Section}
+
+\begin{table}[H]
+	\centering
+	\caption{Tuner Repair Log}
+	\label{tab:tuner_log}
+	\begin{tabular}{|l|l|l|}
+		\hline
+		\textbf{Ref.} & \textbf{Original} & \textbf{Replacement} \\
+		\hline
+         Q202 & 2SK34C & 2SK209GR \\
+        \hline
+         R211 & 1k & 1k x 620ohm \\
+        \hline
+         Q203, Q204 & 2SC460 & 2SC460 ($h_{FE} \approx$ 130) \\
+        \hline
+	\end{tabular}
+\end{table}
+
+\begin{table}[H]
+	\centering
+	\caption{Tuner Voltages}
+	\label{tab:tuner_voltages}
+	\begin{tabular}{|l|l|l|l|}
+    \hline
+ \textbf{Ref.} & \textbf{B} & \textbf{E} & \textbf{C} \\
+    \hline
+    Q201 (FM) & 0.83V (0.83V) & 0.11V (0.12V) & 7.06V (6.72V)  \\
+    \hline
+    Q202 (FM) & 0V (0V) & 5.07V (4.89V) & 0.24V (0.61V)  \\
+    \hline
+    Q203 (FM) & 4.98V (4.89V) &  4.29V (4.19V) & 11.3V (11.2V) \\
+    \hline
+    Q204 (FM) & 6.35V (4.89V) & 4.29V (4.19V) & 7.8V (6.25V) \\ 
+    \hline
+    Q205 (FM) & 0.07 (0.07V) & 0V (0V) & 7.97V (7.97V)  \\
+    (muting on)  & 0.63V (0.63V) & 0V (0V) & 0.1V (0.08V) \\ 
+    \hline
+    Q206 (FM) & 8V (7.97V)  & 5.99V (6.06V)  & 5.99V (6.05V)   \\
+    (muting on) & 5.31V (5.36V) & 6.0V (6.05V)   & 6.0V (6.05V)  \\
+    \hline
+    Q251 (AM) & 1.93V (1.98V) &  1.36V (1.48V)  &  11.6V (11.5V) \\
+    \hline
+    Q252 (AM) & 1.21V (1.2V) & 0.60V (0.7V) &  11.65V (11.5V) \\
+    \hline
+    Q253 (AM) & 1.29V (1.29V) & 0.6V (0.63V) &  11.72V (11.6V) \\
+    \hline
+    Q254 (AM) & 1.56V (1.87V) & 0.86V (1.19V)  &  8.28V (6.76V) \\
+    \hline
+    Q255 (AM) & 2.56V (2.68V) &  1.92V (2.04V) & 7.51V (7.19V) \\
+    \hline
+    Q301 & 1.15V (1.75V) & 0.52V (1.11V)  & 8.01V (4.03V) \\
+    \hline
+    Q302 & 0.64V  & 0V   & 0V  \\
+    \hline
+    Q303 & 8.9V (8.85V) & 9.55V (9.49V) & 4.63V (4.66V) \\
+    \hline
+    Q304 & 8.9V (8.85V)  & 9.56V (9.49V) & 4.64V (4.66V) \\
+    \hline
+	\end{tabular}
+\end{table}
+
+The 2SK34C was unavailable and was replaced with a 2SK209GR. The bias was readjusted to achieve the same drain voltages as in the original design.
+
+VR201 and VR202 were recalibrated according to the technical manual, and the meter now operates correctly.
+
+\section{Final Measurements}
+
+All output voltage and power measurements (e.g., 10\,V\textsubscript{rms} reference levels) were verified using a calibrated Philips PM2503 VA/Ohm meter, as listed in the measurement equipment. In addition, the output waveforms were monitored on a Hameg HM303-4 analog oscilloscope to check for clipping, waveform symmetry, oscillation, and other visible abnormalities during testing. The voltage and power values shown in the FFT plots generated by the audio analyzer are dependent on the configuration of the ADC (e.g., input range and DIP switch settings) and should therefore be considered indicative only. Consequently, absolute amplitude values reported by the FFT framework were not used for quantitative evaluation.
+
+\subsection{Phono Stage}
+
+The signal generator was set to an output level of 450\,mV\textsubscript{rms} and connected to the input of the inverse RIAA converter. The output of the converter was fed into the phono input of the amplifier. An 8\,\(\Omega\) load resistor was connected to the amplifier output, and the volume control was adjusted to obtain an output power of approximately 12.5\,W. The same input voltage and volume setting were maintained for all test frequencies.
+
+The measured spectra show a consistent harmonic structure across all test frequencies. At low frequencies (56\,Hz and 243\,Hz), the distortion is dominated by low-order harmonics (primarily 2nd and 3rd), with THD values around 0.04--0.05\%. At these frequencies, the noise floor is relatively elevated, resulting in higher THD+N values (up to approximately 0.6\%). This indicates that the measurement is partially noise-limited rather than purely distortion-limited.
+
+In the mid-frequency range (987\,Hz), the distortion remains low and stable, with THD around 0.04--0.06\%, suggesting proper linear operation of the equalizer and gain stages.
+
+At higher frequencies (6.999\,kHz and 14.997\,kHz), a slight increase in THD is observed, particularly on the right channel where values approach 0.09\%. This behavior is typical and can be attributed to bandwidth limitations and increased nonlinearity in the amplifier stages at higher frequencies.
+
+A small but consistent channel imbalance is visible, with the right channel generally exhibiting slightly higher distortion and lower SNR compared to the left channel. This may indicate minor component tolerances or residual mismatch in the signal path.
+
+The IMD measurements (CCIF test at 18.987\,kHz and 20.001\,kHz) show very low intermodulation products, with SMPTE IMD around 0.14\% and no significant CCIF artifacts. This confirms good high-frequency linearity and absence of severe slew-rate or crossover-related distortion.
+
+Overall, the phono stage demonstrates good linearity and expected performance for a vintage design, with distortion remaining below 0.1\% across the measured frequency range.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_left_56Hz_0Hz.pdf}
+	\caption{THD measurement of the left phono channel at 56\,Hz}
+	\label{fig:phono_56Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_left_243Hz_0Hz.pdf}
+	\caption{THD measurement of the left phono channel at 243\,Hz}
+	\label{fig:phono_243Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_left_987Hz_0Hz.pdf}
+	\caption{THD measurement of the left phono channel at 987\,Hz}
+	\label{fig:phono_987Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_left_6999Hz_0Hz.pdf}
+	\caption{THD measurement of the left phono channel at 6\,999\,Hz}
+	\label{fig:phono_6999Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_left_14997Hz_0Hz.pdf}
+	\caption{THD measurement of the left phono channel at 14\,997\,Hz}
+	\label{fig:phono_14997Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_right_56Hz_0Hz.pdf}
+	\caption{THD measurement of the right phono channel at 56\,Hz}
+	\label{fig:phono_56Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_right_243Hz_0Hz.pdf}
+	\caption{THD measurement of the right phono channel at 243\,Hz}
+	\label{fig:phono_243Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_right_987Hz_0Hz.pdf}
+	\caption{THD measurement of the right phono channel at 987\,Hz}
+	\label{fig:phono_987Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_right_6999Hz_0Hz.pdf}
+	\caption{THD measurement of the right phono channel at 6\,999\,Hz}
+	\label{fig:phono_6999Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_right_14997Hz_0Hz.pdf}
+	\caption{THD measurement of the right phono channel at 14\,997\,Hz}
+	\label{fig:phono_14997Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_left_imd_18987Hz_20001Hz.pdf}
+	\caption{IMD measurement of the left phono channel (18\,987\,Hz and 20\,001\,Hz)}
+	\label{fig:phono_18987Hz_20001Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_right_imd_18987Hz_20001Hz.pdf}
+	\caption{IMD measurement of the right phono channel (18\,987\,Hz and 20\,001\,Hz)}
+	\label{fig:phono_18987Hz_20001Hz_right}
+\end{figure}
+
+\subsection{Aux}
+
+The signal generator was set to an output level of 250\,mV\textsubscript{rms} and connected to the AUX1 input of the amplifier. An 8\,\(\Omega\) load resistor was connected to the amplifier output, and the volume control was adjusted to obtain an output power of approximately 25\,W. The same input voltage and volume setting were maintained for all test frequencies.
+
+The AUX input measurements show significantly improved performance compared to the phono stage, as expected due to the absence of RIAA equalization and lower overall gain.
+
+Across all test frequencies, the spectra are clean with a well-defined fundamental and low harmonic content. THD values remain in the range of approximately 0.03--0.05\%, with THD+N closely matching THD, indicating that the measurements are distortion-limited rather than noise-limited.
+
+The noise floor is substantially lower than in the phono measurements, resulting in improved SNR (up to approximately 70\,dB) and higher effective resolution. This reflects the simpler signal path and reduced amplification requirements of the AUX input stage.
+
+No significant increase in distortion is observed at higher frequencies (up to 14.997\,kHz), suggesting adequate bandwidth and stable operation of the preamplifier and power amplifier stages under these conditions.
+
+The harmonic structure is dominated by low-order components, with higher-order harmonics remaining well suppressed. Channel matching is generally good, with only minor deviations between left and right channels.
+
+Overall, the AUX input exhibits clean and stable performance with low distortion, confirming proper operation of the line-level signal path after restoration.
+
+The IMD measurements for the AUX input were performed using a CCIF test signal consisting of two closely spaced high-frequency tones at 18\,987\,Hz and 20\,001\,Hz. The resulting spectra show well-defined fundamentals with minimal intermodulation products in the baseband region.
+
+The CCIF intermodulation components are effectively suppressed, with no significant difference-frequency products visible above the noise floor. The SMPTE IMD values remain low, indicating good linearity of the amplification stages even under high-frequency two-tone excitation.
+
+Compared to the phono stage, the AUX input exhibits a cleaner spectrum with a lower noise floor and reduced spurious components. This is expected due to the simpler signal path and absence of high-gain equalization stages.
+
+No signs of slew-rate limiting or high-frequency instability are observed, as evidenced by the absence of elevated sidebands around the fundamental tones. The symmetric distribution of any residual components suggests predominantly low-order nonlinearities.
+
+Overall, the AUX IMD performance is excellent, confirming that the line-level signal path operates with high linearity and minimal intermodulation distortion across the tested frequency range.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_left_56Hz_0Hz.pdf}
+	\caption{THD measurement of the left AUX channel at 56\,Hz}
+	\label{fig:aux_56Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_left_243Hz_0Hz.pdf}
+	\caption{THD measurement of the left AUX channel at 243\,Hz}
+	\label{fig:aux_243Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_left_987Hz_0Hz.pdf}
+	\caption{THD measurement of the left AUX channel at 987\,Hz}
+	\label{fig:aux_987Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_left_6999Hz_0Hz.pdf}
+	\caption{THD measurement of the left AUX channel at 6\,999\,Hz}
+	\label{fig:aux_6999Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_left_14997Hz_0Hz.pdf}
+	\caption{THD measurement of the left AUX channel at 14\,997\,Hz}
+	\label{fig:aux_14997Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_right_56Hz_0Hz.pdf}
+	\caption{THD measurement of the right AUX channel at 56\,Hz}
+	\label{fig:aux_56Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_right_243Hz_0Hz.pdf}
+	\caption{THD measurement of the right AUX channel at 243\,Hz}
+	\label{fig:aux_243Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_right_987Hz_0Hz.pdf}
+	\caption{THD measurement of the right AUX channel at 987\,Hz}
+	\label{fig:aux_987Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_right_6999Hz_0Hz.pdf}
+	\caption{THD measurement of the right AUX channel at 6\,999\,Hz}
+	\label{fig:aux_6999Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_right_14997Hz_0Hz.pdf}
+	\caption{THD measurement of the right AUX channel at 14\,997\,Hz}
+	\label{fig:aux_14997Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_left_imd_18987Hz_20001Hz.pdf}
+	\caption{IMD measurement of the left AUX channel (18\,987\,Hz and 20\,001\,Hz)}
+	\label{fig:aux_18987Hz_20001Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_right_imd_18987Hz_20001Hz.pdf}
+	\caption{IMD measurement of the right AUX channel (18\,987\,Hz and 20\,001\,Hz)}
+	\label{fig:aux_18987Hz_20001Hz_right}
+\end{figure}
+
+\section{Listening Test}
+
+A subjective listening evaluation was conducted to complement the electrical measurements. The restored receiver was tested using both analog and digital program material.
+
+For analog playback, the \textit{Eric Clapton -- Just One Night} LP was used via the phono input. The phono stage delivered a balanced and natural sound, with good clarity in vocals and instruments. Background noise was present at a low level, as expected for a phono stage, but did not interfere with the listening experience. The tonal balance was perceived as warm and consistent with typical characteristics of vintage audio equipment.
+
+For digital playback, a FiiO BTR3 Bluetooth receiver was used as a source, streaming high-resolution audio including recordings by \textit{Bob Dylan}. The AUX input exhibited clean and detailed reproduction, with improved transparency and lower noise compared to the phono input. Dynamic range and stereo imaging were perceived as stable and well-defined.
+
+The system was evaluated using Canton Karat 300 loudspeakers. The combination provided a pleasant listening experience, with sufficient output power, controlled bass response, and clear midrange reproduction. No audible distortion or instability was detected during normal listening levels.
+
+Overall, the listening test confirms the objective measurement results. The AUX input offers superior clarity and lower noise, while the phono stage provides a slightly warmer but still well-controlled sound. The restored receiver performs reliably and delivers enjoyable audio quality in practical use.
+
+The subjective impressions are consistent with the measured performance, particularly the lower noise floor and distortion observed on the AUX input compared to the phono stage.
+
+\section{Conclusion}
+
+The restoration of the Harman Kardon 430 Twin receiver was successful both electrically and functionally. Replacement of known unreliable semiconductor devices and aged capacitors resulted in stable operating points across all circuit stages.
+
+Measurement results confirm good overall performance. The AUX input demonstrates low distortion (typically below 0.05\%) and high signal-to-noise ratio, indicating a clean and linear signal path. The phono stage, while exhibiting higher noise and distortion due to its high gain and equalization requirements, remains within expected limits for vintage equipment, with THD generally below 0.1\%.
+
+A slight channel imbalance was observed, with the right channel showing marginally higher distortion at higher frequencies. However, this does not significantly impact overall performance.
+
+Intermodulation distortion measurements confirm good linearity, with no evidence of slew-rate limiting or instability.
+
+In summary, the restored unit performs in accordance with its original design expectations and is suitable for high-quality audio reproduction.
+
+\begin{thebibliography}{9}
+
+\bibitem{yaar}
+G.~Biro, \textit{Yet Another Audio Analyzer (YAAR)}, GitHub repository, 2026. Available: \url{https://github.com/george-biro/yet-another-audio-analyzer}
+\bibitem{hk430_manual}
+Harman Kardon, \textit{Model 430 AM/FM/Stereo Solid State Receiver Technical Manual}, 90731067
+
+\end{thebibliography}
+
+\end{document}
