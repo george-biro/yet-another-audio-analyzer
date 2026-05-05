@@ -333,7 +333,7 @@ The measured voltages on the Main Amp board were compared with the service manua
 		\hline
          Q202 & 2SK34C & 2SK209GR \\
         \hline
-         R211 & 1k & 1k x 620ohm \\
+         R211 & 1k & 1k x 620ohm = 380ohm \\
         \hline
          Q203, Q204 & 2SC460 & 2SC460 ($h_{FE} \approx$ 130) \\
         \hline
@@ -383,7 +383,7 @@ The measured voltages on the Main Amp board were compared with the service manua
 	\end{tabular}
 \end{table}
 
-The 2SK34C was unavailable and was replaced with a 2SK209GR. The bias was readjusted to achieve the same drain voltages as in the original design.
+As the 2SK34C was unavailable, it was replaced with a 2SK209GR. To restore the original operating conditions, the bias was readjusted to match the specified drain voltages. This was achieved by placing a $620 \Omega$ resistor in parallel with the R211 source resistor, yielding an effective resistance of approximately $380 \Omega$ and compensating for the altered bias characteristics of the replacement device.
 
 VR201 and VR202 were recalibrated according to the technical manual, and the meter now operates correctly.
 
@@ -437,9 +437,37 @@ Overall, the phono stage demonstrates good linearity and expected performance fo
 
 \begin{figure}[H]
 	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_left_8001Hz_0Hz.pdf}
+	\caption{THD measurement of the left phono channel at 8\,001\,Hz}
+	\label{fig:phono_8001Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_left_9999Hz_0Hz.pdf}
+	\caption{THD measurement of the left phono channel at 9\,999\,Hz}
+	\label{fig:phono_9999Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
 	\includegraphics[width=\linewidth]{measurements/hk430_phono_left_14997Hz_0Hz.pdf}
 	\caption{THD measurement of the left phono channel at 14\,997\,Hz}
 	\label{fig:phono_14997Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_left_18987Hz_0Hz.pdf}
+	\caption{THD measurement of the left phono channel at 18\,987\,Hz}
+	\label{fig:phono_18987Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_left_20001Hz_0Hz.pdf}
+	\caption{THD measurement of the left phono channel at 20\,001\,Hz}
+	\label{fig:phono_20001Hz_left}
 \end{figure}
 
 \begin{figure}[H]
@@ -472,21 +500,50 @@ Overall, the phono stage demonstrates good linearity and expected performance fo
 
 \begin{figure}[H]
 	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_right_8001Hz_0Hz.pdf}
+	\caption{THD measurement of the right phono channel at 8\,001\,Hz}
+	\label{fig:phono_8001Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_right_9999Hz_0Hz.pdf}
+	\caption{THD measurement of the right phono channel at 9\,999\,Hz}
+	\label{fig:phono_9999Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
 	\includegraphics[width=\linewidth]{measurements/hk430_phono_right_14997Hz_0Hz.pdf}
 	\caption{THD measurement of the right phono channel at 14\,997\,Hz}
 	\label{fig:phono_14997Hz_right}
 \end{figure}
 
+
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=\linewidth]{measurements/hk430_phono_left_imd_18987Hz_20001Hz.pdf}
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_right_18987Hz_0Hz.pdf}
+	\caption{THD measurement of the right phono channel at 18\,987\,Hz}
+	\label{fig:phono_18987Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_right_20001Hz_0Hz.pdf}
+	\caption{THD measurement of the right phono channel at 20\,001\,Hz}
+	\label{fig:phono_20001Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_left_18987Hz_20001Hz.pdf}
 	\caption{IMD measurement of the left phono channel (18\,987\,Hz and 20\,001\,Hz)}
 	\label{fig:phono_18987Hz_20001Hz_left}
 \end{figure}
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=\linewidth]{measurements/hk430_phono_right_imd_18987Hz_20001Hz.pdf}
+	\includegraphics[width=\linewidth]{measurements/hk430_phono_right_18987Hz_20001Hz.pdf}
 	\caption{IMD measurement of the right phono channel (18\,987\,Hz and 20\,001\,Hz)}
 	\label{fig:phono_18987Hz_20001Hz_right}
 \end{figure}
@@ -545,11 +602,33 @@ Overall, the AUX IMD performance is excellent, confirming that the line-level si
 	\label{fig:aux_6999Hz_left}
 \end{figure}
 
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_left_8001Hz_0Hz.pdf}
+	\caption{THD measurement of the left AUX channel at 8\,001\,Hz}
+	\label{fig:aux_8001Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_left_9999Hz_0Hz.pdf}
+	\caption{THD measurement of the left AUX channel at 9\,999\,Hz}
+	\label{fig:aux_9999Hz_left}
+\end{figure}
+
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=\linewidth]{measurements/hk430_aux_left_14997Hz_0Hz.pdf}
 	\caption{THD measurement of the left AUX channel at 14\,997\,Hz}
 	\label{fig:aux_14997Hz_left}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_left_18987Hz_0Hz.pdf}
+	\caption{THD measurement of the left AUX channel at 18\,987\,Hz}
+	\label{fig:aux_18987Hz_left}
 \end{figure}
 
 \begin{figure}[H]
@@ -582,6 +661,21 @@ Overall, the AUX IMD performance is excellent, confirming that the line-level si
 
 \begin{figure}[H]
 	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_right_8001Hz_0Hz.pdf}
+	\caption{THD measurement of the right AUX channel at 8\,001\,Hz}
+	\label{fig:aux_8001Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_right_8001Hz_0Hz.pdf}
+	\caption{THD measurement of the right AUX channel at 9\,999\,Hz}
+	\label{fig:aux_9999Hz_right}
+\end{figure}
+
+
+\begin{figure}[H]
+	\centering
 	\includegraphics[width=\linewidth]{measurements/hk430_aux_right_14997Hz_0Hz.pdf}
 	\caption{THD measurement of the right AUX channel at 14\,997\,Hz}
 	\label{fig:aux_14997Hz_right}
@@ -589,14 +683,28 @@ Overall, the AUX IMD performance is excellent, confirming that the line-level si
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=\linewidth]{measurements/hk430_aux_left_imd_18987Hz_20001Hz.pdf}
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_right_18987Hz_0Hz.pdf}
+	\caption{THD measurement of the right AUX channel at 18\,987\,Hz}
+	\label{fig:aux_18987Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_right_20001Hz_0Hz.pdf}
+	\caption{THD measurement of the right AUX channel at 14\,997\,Hz}
+	\label{fig:aux_20001Hz_right}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_left_18987Hz_20001Hz.pdf}
 	\caption{IMD measurement of the left AUX channel (18\,987\,Hz and 20\,001\,Hz)}
 	\label{fig:aux_18987Hz_20001Hz_left}
 \end{figure}
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=\linewidth]{measurements/hk430_aux_right_imd_18987Hz_20001Hz.pdf}
+	\includegraphics[width=\linewidth]{measurements/hk430_aux_right_18987Hz_20001Hz.pdf}
 	\caption{IMD measurement of the right AUX channel (18\,987\,Hz and 20\,001\,Hz)}
 	\label{fig:aux_18987Hz_20001Hz_right}
 \end{figure}
