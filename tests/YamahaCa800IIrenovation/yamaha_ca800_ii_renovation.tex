@@ -163,6 +163,151 @@ The capacitance and ESR of all electrolytic capacitors were measured, and any ca
 	\end{tabular}
 \end{table}
 
+\section{Main Board}
+
+The Yamaha CA-800 II uses separate main amplifier boards for the left and right channels. On both boards, the alignment procedure was performed according to the instructions given in the official service manual. After adjustment, the transistor operating voltages were measured and compared against the documented reference values.
+
+In the following tables, the voltages shown in parentheses correspond to the expected values specified in the service manual. For transistors with two measurement rows, the upper row corresponds to operation in Class AB mode, while the lower row corresponds to operation in Class A mode.
+
+Only a small number of components required replacement on the main amplifier boards. The replaced capacitors are located in positions related to signal coupling, feedback, and amplifier stability. After servicing, both amplifier channels showed stable operation and good agreement with the expected operating points.
+
+
+\subsection{Left Channel}
+
+The left main amplifier board was serviced and aligned according to the factory adjustment procedure. Capacitors C601, C605, and C611 were replaced with modern equivalents of suitable electrical specification.
+
+The measured transistor voltages show good agreement with the reference values from the service manual. Minor deviations are considered acceptable and are consistent with normal component tolerances, semiconductor variation, and differences in measurement conditions.
+
+\begin{table}[H]
+	\centering
+	\caption{Main Amp Left Repair Log}
+	\label{tab:repair_log_main_left}
+	\begin{tabular}{|l|l|l|}
+		\hline
+		\textbf{Ref.} & \textbf{Original} & \textbf{Replacement} \\
+		\hline
+		C601 &  &   2.2\,$\mu$F / 50\,V (Panasonic ECEA1HN470U) \\
+        C605 &  &   47\,$\mu$F / 50\,V (Panasonic ECEA1HN2R2U)\\ 
+		C611 &  &   0.47\,$\mu$F / 63\,VAC 100\,VDC (Kemet R82EC3470AA70J) \\
+        
+		\hline
+	\end{tabular}
+\end{table}
+
+\begin{table}[H]
+	\centering
+	\caption{Main Amp Left Voltages}
+	\label{tab:main_amp_left_voltages}
+	\begin{tabular}{|l|l|l|l|}
+    \hline
+ \textbf{Ref.} & \textbf{B} & \textbf{E} & \textbf{C} \\
+    \hline
+    TR601 (pnp) & 12mV (20mV) & 571mV (0.5V) & -51.42V (-53V)  \\
+    \hline
+    TR602 (npn) & -51.45V (-53.5V) & -52V (-54V) & -51.33V (-53V)  \\
+    \hline
+    TR603 (pnp) & 45.3V (47V) & 45.9V (47.5V) & 0.56V (0.5V) \\
+    \hline
+    TR604 (pnp) & 20mV (15mV) & 0.57V (0.5V) & -51.4V (-53V) \\
+    \hline
+    TR605 (npn) & -51.33V (-52V) & -51.8V (-53V) & -1.2V (-1.2V) \\
+                & -51.2V (-52V)  & -51.8V (-53V) & -1.8V (-1.7V) \\
+    \hline
+    TR606 (pnp) & 1.1V (1V) & 1.76V (1.8V) & -1.25V (-1.2V) \\
+                & 1.7V (1.7V) & 2.4V  & -1.77V (-1.7V) \\  
+    \hline
+    TR607 (npn) & -0.6V (-0.6V)  & -1.25V (-1.2V) & 1.16V (1V) \\
+               & -1.13V (-1V)  & -1.73V (-1.7V) & 1.69V (1.7V) \\
+    \hline
+    TR608 (npn) & 10mV (100mV) & 3mV (0V)  & 1.55V (1.5V)   \\
+                & 220mV (300mV)  & 3mV (0V) & 2.2V (2V)  \\
+    \hline
+    TR609 (pnp) & -140mV (-200mV) & 3mV  & -1V (-1V)  \\
+                & -310mV  & 3mV  & -1.46V (-1.5V) \\
+    \hline
+    TR610 (npn) & 1.82V (1.7V) & 1.25V  & 43.24V (43V)  \\
+                & 2.41V (2.4V) & 1.79V    & 17.8V   \\
+    \hline
+    TR611 (pnp) & -1.26V (-1.2V) & -0.66V (-0.6V) & -43.37V (-43V)  \\
+                & -1.78V (-1.74V) & -1.13V (-1V) & -17.6V (-17.0V) \\
+    \hline
+    TR612 (npn) & 0.63V (0.6V) & 21mV (23mV) & 42.22V \\
+                & 1.12V (1V) & 0.4V (0.41V) & 17.8V \\
+    \hline
+    TR613 (pnp) & -0.63V (-0.6V) & -20mV (-30mV)  & -42.52V   \\
+                & -1.12V (-1V) & -0.41V (-0.44V)  & -17.7V  \\
+    \hline
+	\end{tabular}
+\end{table}
+
+\subsection{Right Channel}
+
+The right main amplifier board was serviced and aligned according to the factory adjustment procedure. Capacitors C601, C605, and C611 were replaced with modern equivalents of suitable electrical specification.
+
+The measured transistor voltages show good agreement with the reference values from the service manual. Minor deviations are considered acceptable and are consistent with normal component tolerances, semiconductor variation, and differences in measurement conditions.
+
+\begin{table}[H]
+	\centering
+	\caption{Main Amp Right Repair Log}
+	\label{tab:repair_log_main_right}
+	\begin{tabular}{|l|l|l|}
+		\hline
+		\textbf{Ref.} & \textbf{Original} & \textbf{Replacement} \\
+		\hline
+		C601 &  &   2.2\,$\mu$F / 50\,V (Panasonic ECEA1HN470U) \\
+        C605 &  &   47\,$\mu$F / 50\,V (Panasonic ECEA1HN2R2U)\\ 
+		C611 &  &   0.47\,$\mu$F / 63\,VAC 100\,VDC (Kemet R82EC3470AA70J) \\
+        
+		\hline
+	\end{tabular}
+\end{table}
+
+\begin{table}[H]
+	\centering
+	\caption{Main Amp Right Voltages}
+	\label{tab:main_amp_right_voltages}
+	\begin{tabular}{|l|l|l|l|}
+    \hline
+ \textbf{Ref.} & \textbf{B} & \textbf{E} & \textbf{C} \\
+    \hline
+    TR601 (pnp) & 16mV (20mV)  & 570mV (0.5V)  & -51.42V  (-53V)  \\
+    \hline
+    TR602 (npn) & -51.45V (-53.5V)  & -52.16V (-54V)  & -51.4V (-53V) \\
+    \hline
+    TR603 (pnp) & 45.4V (47V) &  45.96V (47.5V) & 0.56V (0.5V)  \\
+    \hline
+    TR604 (pnp) & 16mV (20mV)  & 0.57 (0.5V) & -51.45V  (-53V) \\
+    \hline
+    TR605 (npn) & -51.4V (-52V) & -52.05V (-53V) & -1.22V (-1.2V)  \\
+                & -51.4V (-52V) & -52.05V (-53V) & -1.8V (-1.7V)  \\
+    \hline
+    TR606 (pnp) & 1.1V (1V) & 1.78V (1.8V) & -1.25V (-1.2V) \\
+                & 1.74V (1.7V) & 2.42V  & -1.77V (-1.7V) \\  
+    \hline
+    TR607 (npn) & -0.58V (-0.6V)  & -1.22V (-1.2V) & 1.1V (1V) \\
+               & -1.16V (-1V)  & -1.8V (-1.7V) & 1.75V (1.7V) \\
+    \hline
+    TR608 (npn) & 10mV (100mV)  & 3mV (0V) & 1.55V (1.5V)  \\
+                & 280mV (300mV)  & 3mV (0V)  & 2.2V (2V)  \\
+    \hline
+    TR609 (pnp) & -100mV (-200mV) & 3mV  & -1.02V (-1V)  \\
+                & -310mV  & 3mV  & -1.55V (-1.5V) \\
+    \hline
+    TR610 (npn) & 1.77V (1.7V)  & 1.2V  & 43.24V (43V)  \\
+                & 2.40V (2.4V) & 1.79V    & 16.2V   \\
+    \hline
+    TR611 (pnp) & -1.22V (-1.2V) & -0.61V (-0.6V)  & -43.37V (-43V) V  \\ 
+                & -1.80V (-1.74V) & -1.13V (-1V)  & -16.2V (-17.0V) \\
+    \hline
+    TR612 (npn) & 0.63V (0.6V) & 21mV (24mV) & 42.22V \\
+                & 1.12V (1V) & 0.4V (0.41V) & 16.2V \\
+    \hline
+    TR613 (pnp) & -0.63V (-0.6V) & -20mV (-40mV)  & -42.52V  \\
+                & -1.12V (-1V) & -0.41V (-0.44V)  & -16.2V  \\
+    \hline
+	\end{tabular}
+\end{table}
+
 \section{Final Measurements}
 
 \subsection{Phono Stage}
