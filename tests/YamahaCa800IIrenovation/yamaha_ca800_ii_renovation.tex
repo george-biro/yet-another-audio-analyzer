@@ -140,6 +140,22 @@ At positions R409, R410, R427, and R428, the installed resistors were verified t
 	\end{tabular}
 \end{table}
 
+\begin{table}[H]
+\centering
+\caption{Estimated transistor thermal behaviour from measured DC operating points}
+\label{tab:function_board_transistor_thermal}
+\begin{tabular}{|l|l|r|r|r|r|}
+\hline
+\textbf{Ref.} & \textbf{Type} & \textbf{$P_D$} & \textbf{$R_{\theta JA}$} & \textbf{$\Delta T_J$} & \textbf{$T_J$ at 40\,°C} \\
+\hline
+TR401, TR402 & KSC1845F & 0.85\,mW & 250\,°C/W & 0.2\,°C & 40.2\,°C \\
+TR403, TR404 & KSC1845F & 22\,mW & 250\,°C/W & 5.5\,°C & 45.5\,°C \\
+TR405, TR406 & KSC1845F & 88\,mW & 250\,°C/W & 22\,°C & 62\,°C \\
+TR407, TR408 & TTC004B & 277\,mW & 100\,°C/W & 28\,°C & 68\,°C \\
+\hline
+\end{tabular}
+\end{table}
+
 \section{Tone control board}
 
 The capacitance and ESR of all electrolytic capacitors were measured, and any capacitor was replaced if a new component provided significantly lower ESR.
@@ -153,7 +169,11 @@ The capacitance and ESR of all electrolytic capacitors were measured, and any ca
 		\textbf{Ref.} & \textbf{Original} & \textbf{Replacement} \\
 		\hline
 		TR301, TR302 & 2SC1345D & KSC1845F (HFE $\approx$ 400) \\
-		TR305..TR308 & 2SC1345D & KSC1845F (HFE $\approx$ 400) \\
+        TR303, TR304 & 2SA763WL4 & KSA992F (HFE $\approx$ 400) \\
+		TR305, TR306 & 2SC1345D & KSC1845F (HFE $\approx$ 400) \\
+        TR307, TR308 & 2SA763WL4 & KSA992F (HFE $\approx$ 400) \\
+        TR309, TR310 & 2SA763WL4 & KSA992F (HFE $\approx$ 400) \\
+		TR311, TR312 & 2SC1345D & KSC1845F (HFE $\approx$ 400) \\
 		\hline
 		C347 &  &   220\,$\mu$F / 50\,V (Panasonic EEU-FR1H221B) \\
 		C325, C325& & 10\,$\mu$F / 25\,V (Kemet A758BG106M1EAAE070) \\
