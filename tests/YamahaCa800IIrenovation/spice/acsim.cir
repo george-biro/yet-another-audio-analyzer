@@ -1,0 +1,31 @@
+.title ACsim
+.include mymodel.cir
+.include include.cir
+
+V1 SUP 0 51 
+V2 IN 0 AC 0.004
+RLoad OUT 0 47k
+Rleak_IN IN 0 100Meg 
+Rleak_OUT OUT 0 100Meg
+
+.control
+    set filetype=ascii
+    op
+    print v(/TR401B) v(/TR401C_TR403B) v(/TR401E) v(/TR403C_TR405C_TR407B) v(/TR403E_TR405B) v(/TR405E) v(/TR407E) v(/TR407C)
+    print @qtr401[ic] @qtr403[ic] @qtr405[ic] @qtr407[ic]
+    print @qtr401[ib] @qtr403[ib] @qtr405[ib] @qtr407[ib]
+    print @qtr401[ie] @qtr403[ie] @qtr405[ie] @qtr407[ie]
+
+    * =========================================================
+    * AC analysis
+    * =========================================================
+    ac dec 300 10 50k
+
+    * =========================================================
+    * Export raw data for Python
+    * =========================================================
+    wrdata sim_ac.csv frequency v(out) v(in)
+    quit
+.endc
+
+.end

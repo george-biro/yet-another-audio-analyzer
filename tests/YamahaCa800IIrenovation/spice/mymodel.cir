@@ -1,0 +1,219 @@
+
+.model BC550C NPN (
++ LEVEL=1
++ IS=2.24183E-14 NF=0.996496 ISE=1.90217E-14 NE=2
++ BF=600 IKF=0.211766 VAF=161.939
++ NR=0.993 ISC=4.7863E-15 NC=0.996
++ BR=12.1807 IKR=0.3423 VAR=123.229
++ RB=167.033 IRB=7.079458E-05 RBM=1.12256
++ RE=0.036 RC=0.79
++ XTB=1.65 EG=1.1737 XTI=3
++ CJE=1.87E-11 VJE=0.732 MJE=0.33
++ CJC=6.16E-12 VJC=0.395 MJC=0.251 XCJC=0.6192 FC=0.5
++ TF=518.15E-12 XTF=10 VTF=10 ITF=1 TR=10.000E-9 )
+
+* KSC1845F — ngspice compatible (derived from LTspice/Fairchild)
+.model KSC1845F NPN (
++ IS=1.075e-13
++ BF=600
++ NF=1
++ BR=13
++ NR=1
++ ISE=1.98e-13
++ NE=2
++ ISC=1.84e-11
++ NC=1.5
++ VAF=83
++ VAR=21
++ IKF=0.6
++ IKR=0.02
++ RB=157
++ RE=1.5
++ RC=180
++ CJE=20.6p
++ VJE=0.73
++ MJE=0.36
++ CJC=4.53p
++ VJC=0.5
++ MJC=0.366
++ TF=31p )
+
+* KSA992F — ngspice compatible
+.model KSA992F PNP (
++ IS=5.75e-14
++ BF=348
++ NF=1
++ BR=3.6
++ NR=0.95
++ ISE=5.75e-15
++ NE=1.5
++ ISC=1.84e-14
++ NC=1
++ VAF=144
++ VAR=17
++ IKF=0.30
++ IKR=0.053
++ RB=140
++ RE=0.38
++ RC=0.47
++ CJE=23.1p
++ VJE=0.855
++ MJE=0.41
++ CJC=8.93p
++ VJC=0.5
++ MJC=0.35
++ TF=0.7n )
+
+
+.model KSA992F PNP (
++ IS=1e-14
++ BF=400
++ NF=1.0
++ VAF=120
++ IKF=0.03
++ ISE=1e-13
++ NE=1.5
++ BR=10
++ RB=100
++ RC=50
++ RE=1
++ CJE=8p
++ VJE=0.75
++ MJE=0.33
++ CJC=4p
++ VJC=0.6
++ MJC=0.33
++ TF=0.5n )
+
+* 2SC1345D — hFE rank D (250–500)  :contentReference[oaicite:4]{index=4}
+* Anchors: Vcbo 55V, Vceo 50V, Vebo 5V; fT ~230MHz @ 2mA; Cob <=3.5pF @ 10V  :contentReference[oaicite:5]{index=5}
+.model 2SC1345D NPN (
++ IS=1.5e-14
++ BF=360
++ NF=1.0
++ VAF=120
++ IKF=0.03
++ ISE=2e-13
++ NE=1.5
++ BR=8
++ RB=120
++ RC=40
++ RE=1
++ CJE=10p
++ VJE=0.75
++ MJE=0.33
++ CJC=7p
++ VJC=0.6
++ MJC=0.33
++ TF=0.85n
++ BV=50
++ BVC=55
++ BVE=5 )
+
+* 2SC1345E — hFE rank E (400–800)  :contentReference[oaicite:6]{index=6}
+* Same breakdown/fT/Cob anchors; higher BF and slightly lower RB.  :contentReference[oaicite:7]{index=7}
+.model 2SC1345E NPN (
++ IS=1.5e-14
++ BF=560
++ NF=1.0
++ VAF=120
++ IKF=0.035
++ ISE=2e-13
++ NE=1.5
++ BR=8
++ RB=90
++ RC=35
++ RE=1
++ CJE=10p
++ VJE=0.75
++ MJE=0.33
++ CJC=7p
++ VJC=0.6
++ MJC=0.33
++ TF=0.80n
++ BV=50
++ BVC=55
++ BVE=5 )
+
+.model 2SA763WL4 PNP (
++ IS=2e-14
++ BF=230
++ NF=1.0
++ VAF=80
++ IKF=0.02
++ ISE=3e-13
++ NE=1.6
++ BR=8
++ RB=220
++ RC=70
++ RE=1
++ CJE=14p
++ VJE=0.75
++ MJE=0.33
++ CJC=13p
++ VJC=0.6
++ MJC=0.33
++ TF=1.6n
++ BV=50
++ BVC=60
++ BVE=5 )
+
+.model 2SA763WL5 PNP (
++ IS=2e-14
++ BF=360
++ NF=1.0
++ VAF=80
++ IKF=0.025
++ ISE=2e-13
++ NE=1.6
++ BR=8
++ RB=160
++ RC=60
++ RE=1
++ CJE=13p
++ VJE=0.75
++ MJE=0.33
++ CJC=13p
++ VJC=0.6
++ MJC=0.33
++ TF=1.5n
++ BV=50
++ BVC=60
++ BVE=5 )
+
+.model TTC004B NPN(
++ LEVEL = 1
++ TNOM = 25
++ IS = 1.374e-013
++ BF = 137.2
++ NF = 1
++ VAF = 11.95
++ IKF = 0.5057
++ ISE = 8.098e-013
++ NE = 1.8
++ BR = 35.11
++ NR = 1
++ VAR = 1000
++ IKR = 10
++ ISC = 1.916e-011
++ NC = 1.5
++ NK = 0.55
++ RE = 0.115
++ RB = 0.885
++ RC = 0.0709
++ CJE = 5.78E-011
++ VJE = 0.75
++ MJE = 0.33
++ CJC = 2.89E-011
++ VJC = 0.75
++ MJC = 0.33
++ FC = 0.5
++ TF = 1.545E-009
++ XTF = 1
++ VTF = 1
++ ITF = 1
++ PTF = 0
++ TR = 0
++ EG = 1.11
++ XTB = 1.4
++ XTI = 6.467)

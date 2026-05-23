@@ -1,0 +1,26 @@
+.title IMD compute
+*************************************************
+* Audio small-signal BJT models (Hfe ≈ 400)
+*************************************************
+.include mymodel.cir
+.include include.cir
+
+RLOAD OUT 0 10k
+Vpwr SUP 0 51 
+
+V19 n19 0 SIN(0 0.1 19k)
+V20 n20 0 SIN(0 0.1 20k)
+R19 n19 IN 1
+R20 n20 IN 1
+
+.control
+  set noaskquit
+  op
+
+  tran 5u 321m 161m 500n
+  wrdata imd_time.csv time v(out)
+  quit
+.endc
+.end
+
+

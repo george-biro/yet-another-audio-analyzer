@@ -99,10 +99,10 @@ At positions R409, R410, R427, and R428, the installed resistors were verified t
 		\hline
 		\textbf{Ref.} & \textbf{Original} & \textbf{Replacement} \\
 		\hline
-		TR401, TR402 & 2SC1345 & BC550C (HFE $\approx$ 600) \\
-		TR403, TR404 & 2SC1345 & KSC1845 (HFE $\approx$ 400) \\
-		TR405, TR406 & 2SC1345 & BC550C (HFE $\approx$ 600) \\
-		TR407, TR408 & 2SC1166 & BC546C (HFE $\approx$ 600) \\
+		TR401, TR402 & 2SC1345 & KSC1845F (HFE $\approx$ 500) \\
+		TR403, TR404 & 2SC1345 & KSC1845F (HFE $\approx$ 500) \\
+		TR405, TR406 & 2SC1345 & KSC1845F (HFE $\approx$ 500) \\
+		TR407, TR408 & 2SC1166 & TTC004B (HFE $\approx$ 180) \\
 		\hline
 		C405, C406 & 100\,pF & 3\,pF \\
 		C407, C408 & 3\,pF & 47\,pF \\
@@ -118,6 +118,25 @@ At positions R409, R410, R427, and R428, the installed resistors were verified t
 		R413, R414 & 15\,k$\Omega$ & 18\,k$\Omega$ \\
 		R415, R416 & 180\,k$\Omega$ & 330\,k$\Omega$ \\
 		\hline
+	\end{tabular}
+\end{table}
+
+\begin{table}[H]
+	\centering
+	\caption{Function Board Voltages}
+	\label{tab:function_board_voltages}
+	\begin{tabular}{|l|l|l|l|}
+    \hline
+ \textbf{Ref.} & \textbf{B} & \textbf{E} & \textbf{C} \\
+    \hline
+    TR401 & 0.66V   & 0.08V  & 5.09V  \\
+    TR402 & 0.65V   & 0.08V  & 5.08V  \\
+    TR403 & 5.07V   & 4.52V  & 26.84V  \\
+    TR404 & 5.04V   & 4.5V  & 27.38V  \\
+    TR405 & 4.5V   & 3.89V  & 27.08V  \\
+    TR406 & 4.49V   & 3.88V  & 27.54V  \\
+    TR407 & 27.2V   & 26.63V  & 49.5V  \\
+    TR408 & 27.6V   & 27.08V  & 49.5V  \\
 	\end{tabular}
 \end{table}
 
@@ -312,95 +331,292 @@ The measured transistor voltages show good agreement with the reference values f
 
 \subsection{Phono Stage}
 
-The signal generator was set to an output level of 450\,mV\textsubscript{rms} and connected to the input of the inverse RIAA converter, the output of which was connected to the Phono~1 input of the amplifier. An 8\,\(\Omega\) load resistor was connected to the amplifier output, and the volume control was adjusted to correspond to an output power of approximately 45\,W. The same input voltage and volume setting were applied at all test frequencies.
+The phono stage was evaluated using an inverse RIAA network driven by a low-distortion signal generator. The generator output level was set to \(450\,\mathrm{mV}_{\mathrm{rms}}\), with the inverse RIAA converter connected to the Phono~1 input of the amplifier. An \(8\,\Omega\) non-inductive load resistor was connected to the amplifier output, and the volume control was adjusted to produce approximately \(25\,\mathrm{W}\) output power. The same input level and volume setting were maintained throughout all measurements.
+
+Measurements were performed using Yet Another Audio Analyzer (YAAA) with a \(192\,\mathrm{kHz}\) sampling rate and \(65536\)-point FFT analysis. The measurements characterize the complete signal path through the phono equalizer, tone amplifier, and power amplifier sections following restoration.
+
+Overall, the phono stage demonstrates very good post-restoration behavior. Low-frequency distortion remains exceptionally low, with THD values near \(0.02\%\) in both channels. Across the midband and upper audio range, THD generally remains between \(0.02\%\) and \(0.05\%\), while THD+N rises moderately due to the higher gain structure and broader noise contribution of the phono equalizer stage. Harmonic spectra are dominated by low-order components, and no signs of instability or oscillation were observed during testing.
+
+\subsubsection{Left Channel}
+
+The left channel exhibits very low distortion at low frequencies, with clean harmonic structure and a stable broadband noise floor.
 
 \begin{figure}[H]
-	\centering
-	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_phono_left_41Hz.pdf}
-	\caption{Phono 41Hz Left}
-	\label{fig:phono_41Hz_left}
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_left_56Hz_0Hz.pdf}
+    \caption{Left channel phono-stage THD measurement at 55.66\,Hz.}
 \end{figure}
 
 \begin{figure}[H]
-	\centering
-	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_phono_left_1014Hz.pdf}
-	\caption{Phono 1kHz Left}
-	\label{fig:phono_1khz_left}
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_left_243Hz_0Hz.pdf}
+    \caption{Left channel phono-stage THD measurement at 243.16\,Hz.}
+\end{figure}
+
+Midband performance remains stable, with distortion products remaining well below audible thresholds.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_left_987Hz_0Hz.pdf}
+    \caption{Left channel phono-stage THD measurement at 987.30\,Hz.}
+\end{figure}
+
+At higher frequencies, the phono stage continues to maintain good linearity, although THD+N gradually increases as expected due to bandwidth limitations and increased wideband noise contribution.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_left_6999Hz_0Hz.pdf}
+    \caption{Left channel phono-stage THD measurement at 6.999\,kHz.}
 \end{figure}
 
 \begin{figure}[H]
-	\centering
-	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_phono_left_10154Hz.pdf}
-	\caption{Phono 10kHz Left}
-	\label{fig:phono_10khz_left}
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_left_8001Hz_0Hz.pdf}
+    \caption{Left channel phono-stage THD measurement at 8.001\,kHz.}
 \end{figure}
 
 \begin{figure}[H]
-	\centering
-	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_phono_right_41Hz.pdf}
-	\caption{Phono 41Hz Right}
-	\label{fig:phono_41Hz_right}
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_left_9999Hz_0Hz.pdf}
+    \caption{Left channel phono-stage THD measurement at 9.999\,kHz.}
 \end{figure}
 
 \begin{figure}[H]
-	\centering
-	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_phono_right_1014Hz.pdf}
-	\caption{Phono 1kHz Right}
-	\label{fig:phono_1khz_right}
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_left_14997Hz_0Hz.pdf}
+    \caption{Left channel phono-stage THD measurement at 14.997\,kHz.}
 \end{figure}
 
 \begin{figure}[H]
-	\centering
-	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_phono_right_10154Hz.pdf}
-	\caption{Phono 10kHz Right}
-	\label{fig:phono_10khz_right}
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_left_18987Hz_0Hz.pdf}
+    \caption{Left channel phono-stage THD measurement at 18.987\,kHz.}
 \end{figure}
+
+A CCIF twin-tone intermodulation test using 18.987\,kHz and 20.001\,kHz tones was also performed. The resulting spectrum shows extremely low CCIF products and very low SMPTE intermodulation distortion.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_left_18987Hz_20001Hz.pdf}
+    \caption{Left channel phono-stage CCIF/SMPTE IMD measurement.}
+\end{figure}
+
+\subsubsection{Right Channel}
+
+The right channel demonstrates similarly low distortion and closely matched spectral behavior throughout the measured frequency range.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_right_56Hz_0Hz.pdf}
+    \caption{Right channel phono-stage THD measurement at 55.66\,Hz.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_right_243Hz_0Hz.pdf}
+    \caption{Right channel phono-stage THD measurement at 243.16\,Hz.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_right_987Hz_0Hz.pdf}
+    \caption{Right channel phono-stage THD measurement at 987.30\,Hz.}
+\end{figure}
+
+At higher frequencies, the right channel maintains stable operation with only moderate increases in THD+N toward the upper edge of the audio band.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_right_6999Hz_0Hz.pdf}
+    \caption{Right channel phono-stage THD measurement at 6.999\,kHz.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_right_8001Hz_0Hz.pdf}
+    \caption{Right channel phono-stage THD measurement at 8.001\,kHz.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_right_9999Hz_0Hz.pdf}
+    \caption{Right channel phono-stage THD measurement at 9.999\,kHz.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_right_14997Hz_0Hz.pdf}
+    \caption{Right channel phono-stage THD measurement at 14.997\,kHz.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_right_18987Hz_0Hz.pdf}
+    \caption{Right channel phono-stage THD measurement at 18.987\,kHz.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_right_20001Hz_0Hz.pdf}
+    \caption{Right channel phono-stage THD measurement at 20.001\,kHz.}
+\end{figure}
+
+The right channel CCIF/SMPTE intermodulation measurement also demonstrates excellent high-frequency linearity and low intermodulation products after restoration.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{measurements/yamaha_ca800ii_phono_right_18987Hz_20001Hz.pdf}
+    \caption{Right channel phono-stage CCIF/SMPTE IMD measurement.}
+\end{figure}
+
+Overall, the phono-stage measurements confirm that the restoration successfully returned the Yamaha CA-800II equalizer and amplification stages to stable and low-distortion operation. Channel matching remains excellent, and the measured performance is fully consistent with a properly functioning high-quality vintage phono preamplifier and integrated amplifier design.
 
 \subsection{Aux}
 
-The signal generator was set to an output level of 250\,mV\textsubscript{rms} and connected to the AUX1 input of the amplifier. An 8\,\(\Omega\) load resistor was connected to the amplifier output, and the volume control was adjusted to correspond to an output power of approximately 45\,W. The same input voltage and volume setting were applied at all test frequencies.
+To evaluate the performance of the line-level input stage and power amplifier section, a low-distortion signal generator was connected to the AUX1 input of the Yamaha CA-800II. The generator output level was set to \(250\,\mathrm{mV}_{\mathrm{rms}}\). The amplifier outputs were terminated with non-inductive \(8\,\Omega\) load resistors, and the volume control was adjusted to produce approximately \(25\,\mathrm{W}\) output power. The same input level and volume setting were maintained throughout the measurement sequence.
+
+Measurements were performed using Yet Another Audio Analyzer (YAAA) with a \(192\,\mathrm{kHz}\) sampling rate and \(65536\)-point FFT analysis. Both channels were characterized across the audio spectrum to evaluate total harmonic distortion (THD), THD+N, and intermodulation behavior after restoration.
+
+The measurements show that both channels maintain consistently low distortion across most of the audible band, with THD typically remaining between \(0.04\%\) and \(0.06\%\). Harmonic content is dominated by low-order components, and no signs of instability or parasitic oscillation were observed during high-frequency testing.
+
+\subsubsection{Left Channel}
+
+At low frequencies, the left channel exhibits very clean sinusoidal behavior with low harmonic distortion and a stable noise floor.
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_aux_left_100Hz.pdf}
-	\caption{Aux 100Hz Left}
-	\label{fig:aux_100Hz_left}
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_left_56Hz_0Hz.pdf}
+	\caption{Left channel THD measurement at 55.66\,Hz.}
+	\label{fig:aux_left_56hz}
 \end{figure}
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_aux_left_1014Hz.pdf}
-	\caption{Aux 1kHz Left}
-	\label{fig:aux_1khz_left}
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_left_243Hz_0Hz.pdf}
+	\caption{Left channel THD measurement at 243.16\,Hz.}
+	\label{fig:aux_left_243hz}
+\end{figure}
+
+Midband performance remains essentially unchanged, indicating good linearity through the voltage amplification and driver stages.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_left_987Hz_0Hz.pdf}
+	\caption{Left channel THD measurement at 987.30\,Hz.}
+	\label{fig:aux_left_1khz}
+\end{figure}
+
+At higher frequencies, a gradual rise in high-order harmonic content and broadband noise becomes visible, though distortion remains low overall.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_left_6999Hz_0Hz.pdf}
+	\caption{Left channel THD measurement at 6.999\,kHz.}
+	\label{fig:aux_left_7khz}
 \end{figure}
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_aux_left_10154Hz.pdf}
-	\caption{Aux 10kHz Left}
-	\label{fig:aux_10khz_left}
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_left_8001Hz_0Hz.pdf}
+	\caption{Left channel THD measurement at 8.001\,kHz.}
+	\label{fig:aux_left_8khz}
 \end{figure}
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_aux_right_100Hz.pdf}
-	\caption{Aux 100Hz Right}
-	\label{fig:aux_100Hz_right}
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_left_9999Hz_0Hz.pdf}
+	\caption{Left channel THD measurement at 9.999\,kHz.}
+	\label{fig:aux_left_10khz}
 \end{figure}
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_aux_right_1014Hz.pdf}
-	\caption{Aux 1kHz Right}
-	\label{fig:aux_1khz_right}
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_left_14997Hz_0Hz.pdf}
+	\caption{Left channel THD measurement at 14.997\,kHz.}
+	\label{fig:aux_left_15khz}
 \end{figure}
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=\linewidth]{figures/yamaha_ca800ii_aux_right_10154Hz.pdf}
-	\caption{Aux 10kHz Right}
-	\label{fig:aux_10khz_right}
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_left_20001Hz_0Hz.pdf}
+	\caption{Left channel THD measurement at 20.001\,kHz.}
+	\label{fig:aux_left_20khz}
 \end{figure}
+
+A CCIF intermodulation test was also performed using 18.987\,kHz and 20.001\,kHz twin tones. The resulting spectrum demonstrates excellent stability and very low intermodulation products.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_left_18987Hz_20001Hz.pdf}
+	\caption{Left channel CCIF/SMPTE intermodulation distortion measurement.}
+	\label{fig:aux_left_imd}
+\end{figure}
+
+\subsubsection{Right Channel}
+
+The right channel measurements closely track the behavior of the left channel, with similarly low harmonic distortion and clean spectral performance.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_right_56Hz_0Hz.pdf}
+	\caption{Right channel THD measurement at 55.66\,Hz.}
+	\label{fig:aux_right_56hz}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_right_243Hz_0Hz.pdf}
+	\caption{Right channel THD measurement at 243.16\,Hz.}
+	\label{fig:aux_right_243hz}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_right_987Hz_0Hz.pdf}
+	\caption{Right channel THD measurement at 987.30\,Hz.}
+	\label{fig:aux_right_1khz}
+\end{figure}
+
+High-frequency measurements indicate a moderate increase in THD+N above 10\,kHz, though overall amplifier behavior remains stable and well controlled.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_right_6999Hz_0Hz.pdf}
+	\caption{Right channel THD measurement at 6.999\,kHz.}
+	\label{fig:aux_right_7khz}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_right_8001Hz_0Hz.pdf}
+	\caption{Right channel THD measurement at 8.001\,kHz.}
+	\label{fig:aux_right_8khz}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_right_9999Hz_0Hz.pdf}
+	\caption{Right channel THD measurement at 9.999\,kHz.}
+	\label{fig:aux_right_10khz}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_right_14997Hz_0Hz.pdf}
+	\caption{Right channel THD measurement at 14.997\,kHz.}
+	\label{fig:aux_right_15khz}
+\end{figure}
+
+The right channel intermodulation measurement also demonstrates excellent recovery after renovation, with very low CCIF distortion products and clean separation of the twin-tone carriers.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{measurements/yamaha_ca800ii_aux_right_18987Hz_20001Hz.pdf}
+	\caption{Right channel CCIF/SMPTE intermodulation distortion measurement.}
+	\label{fig:aux_right_imd}
+\end{figure}
+
+Overall, the AUX input measurements confirm that the restoration work successfully returned the Yamaha CA-800II to stable and low-distortion operation. Both channels remain closely matched and exhibit performance consistent with a properly functioning high-quality vintage integrated amplifier.
 
 \section{Appendix I: Phone NGSpice simulation}
 

@@ -1,0 +1,21 @@
+.title THD compute
+.include mymodel.cir
+.include include.cir
+
+RLOAD OUT 0 10k
+Vpwr SUP 0 51 
+Vin1  IN 0 SIN(0 0.1 1k)
+
+.control
+  set noaskquit
+  op
+  ****************************************
+  * THD RUN (1 kHz)
+  ****************************************
+
+  tran 10u 200m 150m 1u
+  wrdata thd_time.csv time v(out)
+  quit
+.endc
+.end
+
