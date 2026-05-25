@@ -1,3 +1,4 @@
+* File: ACsim.cir
 .title ACsim
 .include mymodel.cir
 .include include.cir

@@ -1,1 +1,2 @@
-.include "yamaha-ca-800-phono.cir"
+* File: imd.cir
+.include "yamaha-ca-800ii-phono.cir"

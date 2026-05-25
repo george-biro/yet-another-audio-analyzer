@@ -106,7 +106,7 @@ phase_deg_riaa_offset = phase_deg_riaa + phase_offset
 mag_err = mag_db - mag_db_riaa_offset
 phase_err = phase_deg - phase_deg_riaa_offset
 
-print("Errors")
+print("Discrepancy from ideal:")
 for f in [100, 500, 1000, 2000, 5000, 10000, 20000]:
     idx_f = np.argmin(np.abs(freq - f))
     print(f"{mag_err[idx_f]:8.2f}dB {phase_err[idx_f]:8.2f}deg @ {f:8.0f}Hz") 

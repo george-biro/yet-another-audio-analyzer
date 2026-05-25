@@ -1,3 +1,4 @@
+* File: thd.cir
 .title THD compute
 .include mymodel.cir
 .include include.cir

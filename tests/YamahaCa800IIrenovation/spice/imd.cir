@@ -1,3 +1,4 @@
+* File imd.cir
 .title IMD compute
 *************************************************
 * Audio small-signal BJT models (Hfe ≈ 400)

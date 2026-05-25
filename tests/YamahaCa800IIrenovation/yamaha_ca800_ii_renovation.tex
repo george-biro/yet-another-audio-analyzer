@@ -66,6 +66,98 @@ Capacitors C705–C708 were replaced with Panasonic EEU-FS2A221 units, as the or
 Transistors TR705, TR707, and TR709 (2SC458) were replaced with KSC1845F devices.
 Following these modifications, complete stability of the power supply was achieved.
 
+The ripple voltage across C741 and C742 was measured as approximately 100\,mV$_{pp}$ at idle and approximately 1\,V$_{pp}$ at 12.5\,W output power.
+
+Assuming full-wave rectification from a 50\,Hz mains supply:
+
+\[
+f_{ripple} = 100\,\mathrm{Hz}
+\]
+
+and
+
+\[
+C = 10\,000\,\mu\mathrm{F} = 0.01\,\mathrm{F}
+\]
+
+the equivalent capacitor discharge current from
+
+\[
+\Delta V = \frac{I}{fC}
+\]
+
+becomes
+
+\[
+I_{idle}
+=
+0.1\,\mathrm{V}
+\cdot
+100\,\mathrm{Hz}
+\cdot
+0.01\,\mathrm{F}
+=
+0.1\,\mathrm{A}
+\]
+
+and
+
+\[
+I_{12.5W}
+=
+1\,\mathrm{V}
+\cdot
+100\,\mathrm{Hz}
+\cdot
+0.01\,\mathrm{F}
+=
+1\,\mathrm{A}
+\]
+
+Assuming approximately 60\,\% efficiency for the class-AB output stage:
+
+\[
+P_{supply}
+=
+\frac{12.5\,\mathrm{W}}{0.6}
+\approx
+20.8\,\mathrm{W}
+\]
+
+For approximately 50\,V supply rails:
+
+\[
+I_{avg}
+\approx
+\frac{20.8\,\mathrm{W}}{50\,\mathrm{V}}
+\approx
+0.42\,\mathrm{A}
+\]
+
+which is consistent with the measured ripple voltage.
+
+The ESR-related ripple component may be estimated from
+
+\[
+V_{ESR} = I_{ripple} \times ESR
+\]
+
+For ESR values between 0.1\,\(\Omega\) and 0.3\,\(\Omega\):
+
+\[
+V_{ESR}
+=
+1\,\mathrm{A}
+\times
+(0.1 \ldots 0.3)\,\Omega
+=
+0.1 \ldots 0.3\,\mathrm{V}
+\]
+
+Therefore, most of the observed 1\,V$_{pp}$ ripple is caused by normal capacitor discharge behaviour rather than excessive ESR.
+
+No visible electrolyte leakage, vent deformation, abnormal heating, or audible power-supply hum was observed. Modern replacement capacitors use different mechanical dimensions and terminal spacing, requiring substantial mechanical modification of the original mounting arrangement. Replacement of C741 and C742 was therefore not considered necessary.
+
 \section{Function Board}
 
 The function board contains the phono preamplifier and input selection circuitry. Some hum was present on this board. The capacitance and ESR of all electrolytic capacitors were measured, and any capacitor was replaced if a new component provided significantly lower ESR.
@@ -123,22 +215,27 @@ At positions R409, R410, R427, and R428, the installed resistors were verified t
 
 \begin{table}[H]
 	\centering
-	\caption{Function Board Voltages}
+	\caption{Function board transistor voltages. Measured values are shown first; values in parentheses correspond to the ngspice simulation and Yamaha service manual, respectively.}
 	\label{tab:function_board_voltages}
 	\begin{tabular}{|l|l|l|l|}
     \hline
  \textbf{Ref.} & \textbf{B} & \textbf{E} & \textbf{C} \\
     \hline
-    TR401 & 0.66V   & 0.08V  & 5.09V  \\
-    TR402 & 0.65V   & 0.08V  & 5.08V  \\
-    TR403 & 5.07V   & 4.52V  & 26.84V  \\
-    TR404 & 5.04V   & 4.5V  & 27.38V  \\
-    TR405 & 4.5V   & 3.89V  & 27.08V  \\
-    TR406 & 4.49V   & 3.88V  & 27.54V  \\
-    TR407 & 27.2V   & 26.63V  & 49.5V  \\
-    TR408 & 27.6V   & 27.08V  & 49.5V  \\
+    TR401 & 0.66V (0.63V) & 0.08V (130mV; 0.2V)  & 5.09V (5.17V; 9V) \\
+    TR402 & 0.65V (0.63V) & 0.08V (130mV; 0.2V) & 5.08V (5.17V; 9V) \\
+    TR403 & 5.07V (5.17V; 9V) & 4.52V (4.58V; 8V) & 26.7V (36.2V; 30.5V)  \\
+    TR404 & 5.04V (5.17V; 9V) & 4.5V (4.58V; 8V)  & 27.07V (36.2V; 30.5V) \\
+    TR405 & 4.5V (4.58V; 8V) & 3.89V (3.97V; 7.5) & 26.7V (36.2V; 30.5V)  \\
+    TR406 & 4.49V (4.58V; 8V) & 3.88V (3.97V; 7.5V) & 27.08V (36.2V; 30.5V) \\
+    TR407 & 27.2V (36.2V; 30.5V)  & 26.7V (35.5V; 30V) & 49.5V (50.8V; 51V) \\
+    TR408 & 27.6V (36.2V; 30.5V) & 27.08V (35.5V; 30V) & 49.5V (50.8V; 51V) \\
+    \hline
 	\end{tabular}
 \end{table}
+
+The measured transistor voltages show reasonable agreement with both the ngspice simulation and the Yamaha service manual values. Remaining discrepancies are expected because the simulation uses simplified transistor models and modern replacement devices rather than the original Yamaha transistors. Additional variation is introduced by component tolerances, supply-voltage differences, and production variations between amplifier revisions.
+
+Although some collector voltages differ noticeably from the service manual and simulation results, all transistor stages remain correctly biased and operate in their forward-active region under normal phono operating conditions. No evidence of transistor saturation or cutoff was observed during simulation or measurement, indicating that the modified phono stage maintains proper linear operation across the intended signal range.
 
 \begin{table}[H]
 \centering
@@ -641,121 +738,150 @@ Overall, the AUX input measurements confirm that the restoration work successful
 \section{Appendix I: Phone NGSpice simulation}
 
 \begin{verbatim}
-	.title KiCad schematic
-	* Official onsemi/Fairchild BC549/550, adjusted for BC550C-like gain
-	.param C405val = 47p
-	.param C407val = 3p
-	.param C409val = 3p
-	
-	.model BC550C NPN (
-	+ LEVEL=1
-	+ IS=2.24183E-14 NF=0.996496 ISE=1.90217E-14 NE=2
-	+ BF=600 IKF=0.211766 VAF=161.939
-	+ NR=0.993 ISC=4.7863E-15 NC=0.996
-	+ BR=12.1807 IKR=0.3423 VAR=123.229
-	+ RB=167.033 IRB=7.079458E-05 RBM=1.12256
-	+ RE=0.036 RC=0.79
-	+ XTB=1.65 EG=1.1737 XTI=3
-	+ CJE=1.87E-11 VJE=0.732 MJE=0.33
-	+ CJC=6.16E-12 VJC=0.395 MJC=0.251 XCJC=0.6192 FC=0.5
-	+ TF=518.15E-12 XTF=10 VTF=10 ITF=1 TR=10.000E-9 )
-	
-	.model KSC1845F npn (
-	+ IS=5.075431E-13 BF=400 NF=1
-	+ BR=0.365 NR=1 ISE=1.68107E-12 NE=2.0
-	+ ISC=1.8378E-12 NC=1.5
-	+ VAF=82.803 VAR=100 IKF=0.20596 IKR=0.0190546
-	+ RB=107 RBM=0.292 IRB=1.258925E-6
-	+ RE=0.15 RC=0.28
-	+ CJE=1.10447E-11 VJE=0.7300286 MJE=0.1619943 FC=0.5
-	+ CJC=5.625739E-12 VJC=0.45 MJC=0.3059045
-	+ XTB=1.7281 EG=1.1809 XTI=3
-	+ TF=1.108e-9 XTF=2.250 ITF=0.0044 VTF=4.0 TR=1.0e-8 )
-	
-	R439 /TR405E Net-_C411-Pad1_ 47
-	R429 /TR407E 0 2.2k
-	R427 Net-_R411-Pad2_ 0 330
-	C411 Net-_C411-Pad1_ 0 47u
-	R425 Net-_C411-Pad1_ Net-_R411-Pad2_ 1.5k
-	R411 /TR401B Net-_R411-Pad2_ 220k
-	QTR401 /TR401C_TR403B /TR401B /TR401E BC550C
-	R409 /TR401E 0 470
-	R413 /TR403E_TR405B 0 4.7k
-	R407 SUP /TR401C_TR403B 470k
-	QTR403 /TR403C_TR405C_TR407B /TR401C_TR403B /TR403E_TR405B KSC1845F
-	R201 Net-_C401-Pad1_ 0 100k
-	R401 Net-_C401-Pad1_ 0 820k
-	R403 Net-_C401-Pad2_ 0 220k
-	C401 Net-_C401-Pad1_ Net-_C401-Pad2_ 10u
-	R443 Net-_C419-Pad1_ /TR407E 220
-	C419 Net-_C419-Pad1_ Net-_C415-Pad2_ 1u
-	R441 Net-_C425-Pad2_ 0 27k
-	C425 Net-_C425-Pad1_ Net-_C425-Pad2_ 10u
-	QTR407 /TR407C /TR403C_TR405C_TR407B /TR407E BC550C
-	R433 Net-_C415-Pad2_ 0 100k
-	R431 SUP /TR407C 10
-	QTR405 /TR403C_TR405C_TR407B /TR403E_TR405B /TR405E BC550C
-	R423 SUP /TR403C_TR405C_TR407B 4.7k
-	R421 /TR401E Net-_C425-Pad1_ 27k
-	C403 Net-_C403-Pad1_ Net-_C401-Pad2_ 4.7u
-	R405 Net-_C403-Pad1_ Net-_C405-Pad2_ 1k
-	R419 Net-_C405-Pad2_ /TR401B 1.2k
-	C417 /TR407C 0 0.1u
-	R435 /TR407E Net-_C421-Pad1_ 2.2k
-	C421 Net-_C421-Pad1_ OUT 1u
-	Rload1 OUT 0 100k
-	
-	C407 /TR401B /TR401E {C407val}
-	C409 /TR401C_TR403B /TR403C_TR405C_TR407B {C409val}
-	C405 0 Net-_C405-Pad2_ {C405val}
-	
-	Ccable1 Net-_C401-Pad1_ 0 140p
-	*Gardo
-	*Rcart1 IN Net-_Lcart1-Pad1_ 470
-	*Lcart1 Net-_Lcart1-Pad1_ Net-_C401-Pad1_ 60m
-	*Technics
-	Rcart1 IN Net-_Lcart1-Pad1_ 400
-	Lcart1 Net-_Lcart1-Pad1_ Net-_C401-Pad1_ 400m
-	
-	* HF damping branch (tune these)
-	*Rhd  Net-_C401-Pad1_ n_hd 22k
-	*Chd  n_hd 0 220p
-	
-	
-	*C413 /TR401E Net-_C413-Pad2_ 5000p
-	*R415 /TR401E Net-_C413-Pad2_ 15k
-	*C415 Net-_C413-Pad2_ Net-_C415-Pad2_ 18000p
-	*R417 Net-_C413-Pad2_ Net-_C419-Pad1_ 180k
-	
-	C413 /TR401E Net-_C413-Pad2_ 3300p
-	R415 /TR401E Net-_C413-Pad2_ 18k
-	C415 Net-_C413-Pad2_ Net-_C415-Pad2_ 12000p
-	R417 Net-_C413-Pad2_ Net-_C419-Pad1_ 330k
-	
-	V1 SUP 0 51 
-	V2 IN 0 AC 0.004
-	RLoad OUT 0 47k
-	Rleak_IN IN 0 100Meg 
-	Rleak_OUT OUT 0 100Meg
-	
-	.control
-	set filetype=ascii
-	op
-	print v(/TR401B) v(/TR401C_TR403B) v(/TR401E) v(/TR403C_TR405C_TR407B) v(/TR403E_TR405B) v(/TR405E) v(/TR407E)
-	
-	* =========================================================
-	* AC analysis
-	* =========================================================
-	ac dec 300 10 50k
-	
-	* =========================================================
-	* Export raw data for Python
-	* =========================================================
-	wrdata sim_ac.csv frequency v(out) v(in)
-	quit
-	.endc
-	
-	.end
+* File: ACsim.cir
+.title ACsim
+.include mymodel.cir
+.include include.cir
+
+V1 SUP 0 51 
+V2 IN 0 AC 0.004
+RLoad OUT 0 47k
+Rleak_IN IN 0 100Meg 
+Rleak_OUT OUT 0 100Meg
+
+.control
+    set filetype=ascii
+    op
+    print v(/TR401B) v(/TR401C_TR403B) v(/TR401E) v(/TR403C_TR405C_TR407B) v(/TR403E_TR405B) v(/TR405E) v(/TR407E) v(/TR407C)
+    print @qtr401[ic] @qtr403[ic] @qtr405[ic] @qtr407[ic]
+    print @qtr401[ib] @qtr403[ib] @qtr405[ib] @qtr407[ib]
+    print @qtr401[ie] @qtr403[ie] @qtr405[ie] @qtr407[ie]
+
+    * =========================================================
+    * AC analysis
+    * =========================================================
+    ac dec 300 10 50k
+
+    * =========================================================
+    * Export raw data for Python
+    * =========================================================
+    wrdata sim_ac.csv frequency v(out) v(in)
+    quit
+.endc
+
+.end
+\end{verbatim}
+
+\begin{verbatim}
+* File: mymodel.cir
+.model KSC1845F NPN (
++ IS=1.075e-13
++ BF=600
++ NF=1
++ BR=13
++ NR=1
++ ISE=1.98e-13
++ NE=2
++ ISC=1.84e-11
++ NC=1.5
++ VAF=83
++ VAR=21
++ IKF=0.6
++ IKR=0.02
++ RB=157
++ RE=1.5
++ RC=180
++ CJE=20.6p
++ VJE=0.73
++ MJE=0.36
++ CJC=4.53p
++ VJC=0.5
++ MJC=0.366
++ TF=31p )
+
+.model TTC004B NPN(
++ LEVEL = 1
++ TNOM = 25
++ IS = 1.374e-013
++ BF = 137.2
++ NF = 1
++ VAF = 11.95
++ IKF = 0.5057
++ ISE = 8.098e-013
++ NE = 1.8
++ BR = 35.11
++ NR = 1
++ VAR = 1000
++ IKR = 10
++ ISC = 1.916e-011
++ NC = 1.5
++ NK = 0.55
++ RE = 0.115
++ RB = 0.885
++ RC = 0.0709
++ CJE = 5.78E-011
++ VJE = 0.75
++ MJE = 0.33
++ CJC = 2.89E-011
++ VJC = 0.75
++ MJC = 0.33
++ FC = 0.5
++ TF = 1.545E-009
++ XTF = 1
++ VTF = 1
++ ITF = 1
++ PTF = 0
++ TR = 0
++ EG = 1.11
++ XTB = 1.4
++ XTI = 6.467)
+\end{verbatim}
+
+\begin{verbatim}
+.title Yamaha CA800 II phono netlist
+R439 /TR405E Net-_C411-Pad1_ 47
+R429 /TR407E 0 2.2k
+R427 Net-_R411-Pad2_ 0 330
+C411 Net-_C411-Pad1_ 0 47u
+R425 Net-_C411-Pad1_ Net-_R411-Pad2_ 1.5k
+R411 /TR401B Net-_R411-Pad2_ 220k
+QTR401 /TR401C_TR403B /TR401B /TR401E KSC1845F
+R409 /TR401E 0 470
+R413 /TR403E_TR405B 0 4.7k
+QTR403 /TR403C_TR405C_TR407B /TR401C_TR403B /TR403E_TR405B KSC1845F
+R407 SUP /TR401C_TR403B 470k
+C409 /TR401C_TR403B /TR403C_TR405C_TR407B 47p
+Rcart1 IN Net-_Lcart1-Pad1_ 800
+Lcart1 Net-_Lcart1-Pad1_ Net-_C401-Pad1_ 400m
+R201 Net-_C401-Pad1_ 0 100k
+R401 Net-_C401-Pad1_ 0 820k
+R403 Net-_C401-Pad2_ 0 220k
+Ccable1 Net-_C401-Pad1_ 0 140p
+C401 Net-_C401-Pad1_ Net-_C401-Pad2_ 10u
+C415 Net-_C413-Pad2_ Net-_C415-Pad2_ 18000p
+R443 Net-_C419-Pad1_ /TR407E 220
+R417 Net-_C413-Pad2_ Net-_C419-Pad1_ 180k
+C419 Net-_C419-Pad1_ Net-_C415-Pad2_ 1u
+R441 Net-_C425-Pad2_ 0 27k
+C425 Net-_C425-Pad1_ Net-_C425-Pad2_ 10u
+C413 /TR401E Net-_C413-Pad2_ 5000p
+R415 /TR401E Net-_C413-Pad2_ 15k
+QTR407 /TR407C /TR403C_TR405C_TR407B /TR407E TTC004B
+R433 Net-_C415-Pad2_ 0 100k
+R431 SUP /TR407C 10
+QTR405 /TR403C_TR405C_TR407B /TR403E_TR405B /TR405E KSC1845F
+R423 SUP /TR403C_TR405C_TR407B 4.7k
+R421 /TR401E Net-_C425-Pad1_ 27k
+C403 Net-_C403-Pad1_ Net-_C401-Pad2_ 4.7u
+C407 /TR401B /TR401E 47p
+R405 Net-_C403-Pad1_ Net-_C405-Pad2_ 1k
+R419 Net-_C405-Pad2_ /TR401B 1.2k
+C405 0 Net-_C405-Pad2_ 3p
+C417 /TR407C 0 0.1u
+R435 /TR407E Net-_C421-Pad1_ 2.2k
+C421 Net-_C421-Pad1_ OUT 1u
+Rload1 OUT 0 100k
+.end
 \end{verbatim}
 
 \section{Appendix II: RIAA comparsion}

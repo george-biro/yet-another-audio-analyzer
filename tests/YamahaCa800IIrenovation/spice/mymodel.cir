@@ -1,4 +1,4 @@
-
+* File: mymodel.cir
 .model BC550C NPN (
 + LEVEL=1
 + IS=2.24183E-14 NF=0.996496 ISE=1.90217E-14 NE=2
@@ -12,33 +12,7 @@
 + CJC=6.16E-12 VJC=0.395 MJC=0.251 XCJC=0.6192 FC=0.5
 + TF=518.15E-12 XTF=10 VTF=10 ITF=1 TR=10.000E-9 )
 
-* KSC1845F — ngspice compatible (derived from LTspice/Fairchild)
-.model KSC1845F NPN (
-+ IS=1.075e-13
-+ BF=600
-+ NF=1
-+ BR=13
-+ NR=1
-+ ISE=1.98e-13
-+ NE=2
-+ ISC=1.84e-11
-+ NC=1.5
-+ VAF=83
-+ VAR=21
-+ IKF=0.6
-+ IKR=0.02
-+ RB=157
-+ RE=1.5
-+ RC=180
-+ CJE=20.6p
-+ VJE=0.73
-+ MJE=0.36
-+ CJC=4.53p
-+ VJC=0.5
-+ MJC=0.366
-+ TF=31p )
 
-* KSA992F — ngspice compatible
 .model KSA992F PNP (
 + IS=5.75e-14
 + BF=348
@@ -64,29 +38,6 @@
 + MJC=0.35
 + TF=0.7n )
 
-
-.model KSA992F PNP (
-+ IS=1e-14
-+ BF=400
-+ NF=1.0
-+ VAF=120
-+ IKF=0.03
-+ ISE=1e-13
-+ NE=1.5
-+ BR=10
-+ RB=100
-+ RC=50
-+ RE=1
-+ CJE=8p
-+ VJE=0.75
-+ MJE=0.33
-+ CJC=4p
-+ VJC=0.6
-+ MJC=0.33
-+ TF=0.5n )
-
-* 2SC1345D — hFE rank D (250–500)  :contentReference[oaicite:4]{index=4}
-* Anchors: Vcbo 55V, Vceo 50V, Vebo 5V; fT ~230MHz @ 2mA; Cob <=3.5pF @ 10V  :contentReference[oaicite:5]{index=5}
 .model 2SC1345D NPN (
 + IS=1.5e-14
 + BF=360
@@ -110,8 +61,6 @@
 + BVC=55
 + BVE=5 )
 
-* 2SC1345E — hFE rank E (400–800)  :contentReference[oaicite:6]{index=6}
-* Same breakdown/fT/Cob anchors; higher BF and slightly lower RB.  :contentReference[oaicite:7]{index=7}
 .model 2SC1345E NPN (
 + IS=1.5e-14
 + BF=560
@@ -158,6 +107,8 @@
 + BVC=60
 + BVE=5 )
 
+
+
 .model 2SA763WL5 PNP (
 + IS=2e-14
 + BF=360
@@ -180,6 +131,31 @@
 + BV=50
 + BVC=60
 + BVE=5 )
+
+.model KSC1845F NPN (
++ IS=1.075e-13
++ BF=600
++ NF=1
++ BR=13
++ NR=1
++ ISE=1.98e-13
++ NE=2
++ ISC=1.84e-11
++ NC=1.5
++ VAF=83
++ VAR=21
++ IKF=0.6
++ IKR=0.02
++ RB=157
++ RE=1.5
++ RC=180
++ CJE=20.6p
++ VJE=0.73
++ MJE=0.36
++ CJC=4.53p
++ VJC=0.5
++ MJC=0.366
++ TF=31p )
 
 .model TTC004B NPN(
 + LEVEL = 1

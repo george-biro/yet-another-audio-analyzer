@@ -1,4 +1,5 @@
-.title KiCad schematic
+* File: yamaha-ca-800-phono.cir
+.title Yamaha CA800 II phono netlist
 R439 /TR405E Net-_C411-Pad1_ 47
 R429 /TR407E 0 2.2k
 R427 Net-_R411-Pad2_ 0 330
