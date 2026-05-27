@@ -160,11 +160,9 @@ No visible electrolyte leakage, vent deformation, abnormal heating, or audible p
 
 \section{Function Board}
 
-The function board contains the phono preamplifier and input selection circuitry. Some hum was present on this board. The capacitance and ESR of all electrolytic capacitors were measured, and any capacitor was replaced if a new component provided significantly lower ESR.
+The function board contains the phono preamplifier and input-selection circuitry. The capacitance and ESR of all electrolytic capacitors were measured, and capacitors were replaced whenever modern components provided significantly lower ESR values. Some hum was present on this board, originating from the 2SC1345 transistors. After replacing these transistors, their complementary counterparts also had to be replaced.
 
-Modifications were required because the replacement transistors exhibit different internal capacitances. Circuit simulations indicated significant deviations when these transistors were used with the \textit{Technics EPC-207C} moving-magnet cartridge. In addition, the original configuration resulted in unsatisfactory sound quality.
-
-Given that the EPC-207C cartridge has an inductance of approximately 400\,mH and an internal resistance of approximately 400\,$\Omega$, the modified RIAA resistor–capacitor network exhibits very low phase and gain errors. As a result, the overall sound quality was significantly improved. The modification was also simulated, and the results are shown in fig. \ref{fig:simu}.
+Further measurements and simulations showed that, when used with a moving-magnet cartridge from the same era (\textit{Technics EPC-207C}), which has an internal inductance of approximately 400\,mH and an internal resistance of approximately 400\,$\Omega$, the preamplifier did not perform optimally. In addition, the original configuration resulted in unsatisfactory sound quality. Consequently, modifications were made to the RIAA capacitors (C413, C414, C415, and C416). As a result, the modified RIAA circuit exhibits very low phase and gain errors, and the overall sound quality was significantly improved. The modified circuit was also simulated, and the results are shown in Fig.~\ref{fig:simu}.
 
 \paragraph{Documentation Note}
 At positions R409, R410, R427, and R428, the installed resistors were verified to be original components. Measured resistance values of 4.7\,k$\Omega$ (R409 and R410) and 330\,$\Omega$ (R427 and R428) were confirmed by both direct measurement and resistor color coding. The values specified in the official schematic differ from those observed and do not appear to be electrically consistent with correct circuit operation. A documentation error in the schematic is therefore suspected.
@@ -311,6 +309,8 @@ In the following tables, the voltages shown in parentheses correspond to the exp
 
 Only a small number of components required replacement on the main amplifier boards. The replaced capacitors are located in positions related to signal coupling, feedback, and amplifier stability. After servicing, both amplifier channels showed stable operation and good agreement with the expected operating points.
 
+\paragraph{Documentation Note}
+In the original schematics, the transistor at position TR605 is incorrectly listed as 2SC1174-2. The actual installed component is 2SC1124.
 
 \subsection{Left Channel}
 
