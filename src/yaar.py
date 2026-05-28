@@ -4,6 +4,8 @@
 #
 # Copyright 2026 George Biro
 #
+# https://github.com/george-biro/yet-another-audio-analyzer
+#
 # GPLv3-or-later
 #
 # File yaar.py
@@ -540,30 +542,46 @@ def build_two_tone_masks(
     tones_mask = notch(wc, cfg.flt_threshold)
 
     # --- Intermodulation distortion indices ---
-    imd_idx = [
-        abs(idx1 - idx2),
-        abs(2 * idx1 - idx2),
-        abs(2 * idx2 - idx1),
-        idx1 + idx2,
-        idx1 * 2,
-        idx1 * 3,
-        idx1 * 4,
-        idx2 * 2,
-        idx2 * 3,
-        idx2 * 4
+    # --- Intermodulation distortion frequencies ---
+    imd_freqs = [
+        abs(freq2 - freq1),      # CCIF difference
+        abs(2 * freq1 - freq2),  # SMPTE lower
+        abs(2 * freq2 - freq1),  # SMPTE upper
+        freq1 + freq2,
+        2 * freq1,
+        3 * freq1,
+        4 * freq1,
+        2 * freq2,
+        3 * freq2,
+        4 * freq2,
     ]
 
     imd_mask = []
     tmp = np.zeros_like(wc)
 
-    for idx in imd_idx:
-       
-        if 0 <= idx < len(wc):
-            iw = wref.shift_kernel(idx, mag[idx])
-            imask = notch(tmp, cfg.flt_threshold)
-            tmp += iw
-        else:
-            imask = (np.zeros_like(wc))
+    bin_hz = freqs[1] - freqs[0]
+    search_hz = max(2.0 * bin_hz, cfg.center_freq_threshold)
+
+    for f in imd_freqs:
+        if f <= 0 or f >= freqs[-1]:
+            imd_mask.append(np.zeros_like(wc))
+            continue
+
+        # Find strongest bin near the theoretical product frequency.
+        lo = np.searchsorted(freqs, f - search_hz)
+        hi = np.searchsorted(freqs, f + search_hz) + 1
+        lo = max(lo, 0)
+        hi = min(hi, len(freqs))
+
+        if hi <= lo:
+            imd_mask.append(np.zeros_like(wc))
+            continue
+
+        idx = lo + int(np.argmax(mag[lo:hi]))
+
+        iw = wref.shift_kernel(idx, mag[idx])
+        imask = notch(iw, cfg.flt_threshold) 
+        tmp += iw
 
         imd_mask.append(imask)
 
