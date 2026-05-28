@@ -508,10 +508,24 @@ def build_single_tone_masks(
     tones_mask = notch(wc, cfg.flt_threshold)
 
     tmp = np.zeros_like(wc)
+
+    bin_hz = freqs[1] - freqs[0]
+    search_hz = max(2.0 * bin_hz, cfg.center_freq_threshold)
+
     for h in range(2, cfg.thd_harmonics + 1):
-        harmonic_idx = carrier_idx * h
-        if harmonic_idx >= len(wc):
+        harmonic_freq = carrier_freq * h
+        if harmonic_freq >= freqs[-1]:
             break
+
+        lo = np.searchsorted(freqs, harmonic_freq - search_hz)
+        hi = np.searchsorted(freqs, harmonic_freq + search_hz) + 1
+        lo = max(lo, 0)
+        hi = min(hi, len(freqs))
+
+        if hi <= lo:
+            continue
+
+        harmonic_idx = lo + int(np.argmax(mag[lo:hi]))
 
         w = wref.shift_kernel(harmonic_idx, mag[harmonic_idx])
         tmp += w
