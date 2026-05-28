@@ -224,16 +224,22 @@ class WRef:
         return values.copy()
 
     @staticmethod
-    def wclean(ts: np.ndarray, window: np.ndarray, center_freq: float) -> np.ndarray:
+    def wclean(ts: np.ndarray, window: np.ndarray, center_freq: float, widen_bins: int = 0) -> np.ndarray:
         clean = np.sin(2.0 * np.pi * center_freq * ts) * window
         spectrum = np.fft.rfft(clean)
         mag = WRef.normalize_unit(np.abs(spectrum) / len(ts))
+
+        if widen_bins > 0:
+            kernel = np.ones(2 * widen_bins + 1)
+            mag = np.convolve(mag, kernel, mode="same")
+            mag = WRef.normalize_unit(mag)
+
         return mag
 
-    def __init__(self, ts: np.ndarray, window: np.ndarray, freqs: np.ndarray):
+    def __init__(self, ts: np.ndarray, window: np.ndarray, freqs: np.ndarray, widen_bins: int = 0):
         self.ref_idx = len(freqs) // 2
         ref_freq = freqs[self.ref_idx]
-        self.ref = self.wclean(ts, window, ref_freq)
+        self.ref = self.wclean(ts, window, ref_freq, widen_bins)
         self.rpeak = np.max(self.ref)
 
     def shift_kernel(self, target_idx: int, peak) -> np.ndarray:
@@ -328,73 +334,31 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--freq", type=int, default=192000, help="Sample rate")
     parser.add_argument("--dev", type=int, default=4, help="ID of sound device")
-    parser.add_argument(
-        "--chsel", type=int, default=1, help="Selected channel (0-based)"
-    )
+    parser.add_argument("--chsel", type=int, default=1, help="Selected channel (0-based)")
     parser.add_argument("--chnum", type=int, default=2, help="Number of channels")
     parser.add_argument("--chunk", type=int, default=65536, help="FFT size")
     parser.add_argument("--adcrng", type=float, default=100.0, help="ADC voltage range")
-    parser.add_argument(
-        "--vrange", type=float, default=40.0, help="Display voltage range in V"
-    )
-    parser.add_argument(
-        "--frange", type=float, default=70000.0, help="Displayed frequency range in Hz"
-    )
-    parser.add_argument(
-        "--trange", type=float, default=100.0, help="Displayed time range in ms"
-    )
-    parser.add_argument(
-        "--wrange", type=float, default=-150.0, help="FFT range lower bound in dB"
-    )
+    parser.add_argument("--vrange", type=float, default=40.0, help="Display voltage range in V")
+    parser.add_argument("--frange", type=float, default=70000.0, help="Displayed frequency range in Hz")
+    parser.add_argument("--trange", type=float, default=100.0, help="Displayed time range in ms")
+    parser.add_argument("--wrange", type=float, default=-150.0, help="FFT range lower bound in dB")
     parser.add_argument("--rload", type=float, default=8.0, help="Load resistor in ohm")
-    parser.add_argument(
-        "--thd", type=int, default=7, help="Number of harmonics for THD"
-    )
-    parser.add_argument(
-        "--duration", type=int, default=240, help="Time to exit in seconds"
-    )
+    parser.add_argument("--thd", type=int, default=7, help="Number of harmonics for THD")
+    parser.add_argument("--duration", type=int, default=240, help="Time to exit in seconds")
     parser.add_argument("--plot", type=str, default="", help="Write plot to file")
     parser.add_argument("--csv", type=str, default="", help="Append metrics to CSV")
     parser.add_argument("--window", type=str, default="hanning", help="Window function")
-    parser.add_argument(
-        "--simfreq", type=float, default=0.0, help="Simulate exact frequency in Hz"
-    )
-    parser.add_argument(
-        "--simnoise", type=float, default=-160.0, help="Simulate noise amplitude in dB"
-    )
-    parser.add_argument(
-        "--flttsh", type=float, default=120.0, help="Notch filter level in dB"
-    )
-    parser.add_argument(
-        "--cftsh", type=float, default=0.25, help="Center frequency threshold in Hz"
-    )
-    parser.add_argument(
-        "--twotone-rel-db",
-        type=float,
-        default=16.0,
-        help="Second tone must be within this many dB of the main tone to enter IMD mode",
-    )
-    parser.add_argument(
-        "--peak-sep-hz",
-        type=float,
-        default=20.0,
-        help="Minimum separation between two fundamentals in Hz for IMD detection",
-    )
-    parser.add_argument(
-        "--simfreq2", type=float, default=0.0, help="Second simulated tone frequency"
-    )
-
-    parser.add_argument(
-        "--simamp2", type=float, default=1.0, help="Second simulated tone amplitude"
-    )
-    parser.add_argument(
-        "--simhmncs", type=float, default=0.0, help="Add harmonics to the simulation"
-    )
-    parser.add_argument(
-        "--anet",
-        action="store_true",
-        help="Enable A-weighting network for distortion/noise metrics and FFT display",
-    )
+    parser.add_argument("--simfreq", type=float, default=0.0, help="Simulate exact frequency in Hz")
+    parser.add_argument("--simnoise", type=float, default=-160.0, help="Simulate noise amplitude in dB")
+    parser.add_argument("--flttsh", type=float, default=120.0, help="Notch filter level in dB")
+    parser.add_argument("--cftsh", type=float, default=0.25, help="Center frequency threshold in Hz")
+    parser.add_argument("--twotone-rel-db",type=float,default=16.0, help="Second tone must be within this many dB of the main tone to enter IMD mode")
+    parser.add_argument("--peak-sep-hz",type=float,default=20.0,help="Minimum separation between two fundamentals in Hz for IMD detection")
+    parser.add_argument("--simfreq2", type=float, default=0.0, help="Second simulated tone frequency")
+    parser.add_argument("--simamp2", type=float, default=1.0, help="Second simulated tone amplitude")
+    parser.add_argument("--simhmncs", type=float, default=0.0, help="Add harmonics to the simulation")
+    parser.add_argument("--anet",action="store_true",help="Enable A-weighting network for distortion/noise metrics and FFT display")
+    parser.add_argument("--tonewidth",type=int,default=0,help="Extra FFT bins to widen tone/window masks")
     return parser
 
 
@@ -717,7 +681,7 @@ def main() -> int:
         )
         anet = a_weighting_curve(freqs) if args.anet else np.ones_like(freqs)
         ts, time_range = get_ts(cfg.chunk, cfg.sample_rate, args.trange)
-        wref = WRef(ts, window, freqs)
+        wref = WRef(ts, window, freqs, args.tonewidth)
         fft_avg = RollingFFTAverage(freqs, 4)
 
         td_step = max(1, len(ts) // 4000)
