@@ -198,6 +198,22 @@ def clean_log(values: np.ndarray, floor: float = 1e-20) -> np.ndarray:
     clipped = np.maximum(values, floor)
     return 20.0 * np.log10(clipped)
 
+def a_weighting_curve(freqs: np.ndarray) -> np.ndarray:
+    """IEC 61672-style A-weighting amplitude curve, normalized to 0 dB at 1 kHz."""
+    f = np.maximum(freqs.astype(float), 1e-12)
+    f2 = f * f
+
+    ra = (
+        (12194.0**2 * f2 * f2)
+        / (
+            (f2 + 20.6**2)
+            * np.sqrt((f2 + 107.7**2) * (f2 + 737.9**2))
+            * (f2 + 12194.0**2)
+        )
+    )
+
+    a_db = 20.0 * np.log10(np.maximum(ra, EPS)) + 2.0
+    return from_db(a_db)
 
 class WRef:
     @staticmethod
@@ -373,6 +389,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--simhmncs", type=float, default=0.0, help="Add harmonics to the simulation"
+    )
+    parser.add_argument(
+        "--anet",
+        action="store_true",
+        help="Enable A-weighting network for distortion/noise metrics and FFT display",
     )
     return parser
 
@@ -694,6 +715,7 @@ def main() -> int:
         freqs, fmask, i_lo, i_hi, best_freqs = get_fft_params(
             cfg.chunk, cfg.sample_rate, freq_range
         )
+        anet = a_weighting_curve(freqs) if args.anet else np.ones_like(freqs)
         ts, time_range = get_ts(cfg.chunk, cfg.sample_rate, args.trange)
         wref = WRef(ts, window, freqs)
         fft_avg = RollingFFTAverage(freqs, 4)
@@ -824,7 +846,14 @@ def main() -> int:
                 thd_db = thd_pct = float("nan")
                 thdn_db = thdn_pct = float("nan")
             sinad_db = sinad(vfund, vdist, vnoise)
-            snr_db = snr(vfund, vnoise)
+
+            if args.anet:
+                noise_mask = 1.0 - np.clip(tones_mask + harmonics_mask, 0.0, 1.0)
+                vnoise_snr = compute_power(mag * anet, noise_mask)
+            else:
+                vnoise_snr = vnoise
+
+            snr_db = snr(vfund, vnoise_snr)
             enob_bits = enob(snr_db)
 
             # ---- TIME PLOT (DECIMATED) ----
