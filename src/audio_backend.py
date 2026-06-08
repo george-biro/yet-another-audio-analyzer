@@ -202,4 +202,4 @@ def read_measurement(cfg, ring):
     #        "R rms:", np.sqrt(np.mean(right**2))
     #    )
 
-    return data[:, cfg.channel_select] * cfg.adc_range
+    return data[:, cfg.channel_select] * cfg.adc_range * np.sqrt(2.0)

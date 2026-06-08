@@ -54,8 +54,6 @@ All replacement components were tested prior to installation; however, no warran
 
 The FFT analysis was performed using a custom-developed tool (YAAR) \cite{yaar}, which provides high-resolution spectral analysis and distortion metrics.
 
-
-
 \section{Power Supply}
 
 Random spike noises were observed on the power supply output.
@@ -65,6 +63,25 @@ Low hFE was observed in TR701 and TR704, and these transistors were replaced wit
 Capacitors C705–C708 were replaced with Panasonic EEU-FS2A221 units, as the original capacitors exhibited significantly reduced capacitance (approximately 140 µF). Capacitors C709 and C710 were replaced with Panasonic EEUFR1J101L units.
 Transistors TR705, TR707, and TR709 (2SC458) were replaced with KSC1845F devices.
 Following these modifications, complete stability of the power supply was achieved.
+
+\begin{table}[H]
+	\centering
+	\caption{Power Supply Board Repair Log}
+	\label{tab:repair_log_tone_control_board}
+	\begin{tabular}{|l|l|l|}
+		\hline
+		\textbf{Ref.} & \textbf{Original} & \textbf{Replacement} \\
+		\hline
+		TR701 & 2SA671S   & BD140-16 (OnSemi) \\
+                TR704 & 2SC1061S  & BD139-16 (OnSemi) \\
+                TR705, TR707, TR709 & 2SC458 & KSC1845F (OnSemi )\\
+                C705, C706, C707, C708 &   & Panasonic EEU-FS2A221 \\
+                C709, C710 & &  Panasonic EEUFR1J101L \\ 
+                D703, D706 &  & 30V zener \\
+                D704, D705 &  & 20V zener \\ 
+		\hline
+	\end{tabular}
+\end{table}
 
 The ripple voltage across C741 and C742 was measured as approximately 100\,mV$_{pp}$ at idle and approximately 1\,V$_{pp}$ at 12.5\,W output power.
 
@@ -330,7 +347,12 @@ The measured transistor voltages show good agreement with the reference values f
         C605 &  &   47\,$\mu$F / 50\,V (Panasonic ECEA1HN2R2U)\\ 
 		C611 &  &   0.47\,$\mu$F / 63\,VAC 100\,VDC (Kemet R82EC3470AA70J) \\
         
-		\hline
+		TR601, TR603, TR604 & 2SA673WL4,5 & KSA992F (OnSemi HFE $\approx$ 350) \\
+                TR605 & 2SC1124-2 & TTC004B (Toshiba HFE $\approx$ 180) \\
+                TR607 & 2SC458C & KSC1815Y (OnSemi HFE $\approx$ 130)\\
+                TR610 & 2SC1124-2 & TTC004B  (Toshiba HFE $\approx$ 180) \\
+                TR611 & 2SA706 3 & TTA004B (Toshiba HFE $\approx$ 180) \\
+                \hline
 	\end{tabular}
 \end{table}
 
@@ -342,40 +364,40 @@ The measured transistor voltages show good agreement with the reference values f
     \hline
  \textbf{Ref.} & \textbf{B} & \textbf{E} & \textbf{C} \\
     \hline
-    TR601 (pnp) & 12mV (20mV) & 571mV (0.5V) & -51.42V (-53V)  \\
+    TR601 (pnp) & 27mV (20mV) & 594mV (0.5V) & -51.55V (-53V)  \\
     \hline
-    TR602 (npn) & -51.45V (-53.5V) & -52V (-54V) & -51.33V (-53V)  \\
+    TR602 (npn) & -51.67V (-53.5V) & -52.26V (-54V) & -51.55V (-53V)  \\
     \hline
-    TR603 (pnp) & 45.3V (47V) & 45.9V (47.5V) & 0.56V (0.5V) \\
+    TR603 (pnp) & 45.5V (47V) & 46.078V (47.5V) & 0.59V (0.5V) \\
     \hline
-    TR604 (pnp) & 20mV (15mV) & 0.57V (0.5V) & -51.4V (-53V) \\
+    TR604 (pnp) & 34mV (15mV) & 0.595V (0.5V) & -51.68V (-53V) \\
     \hline
-    TR605 (npn) & -51.33V (-52V) & -51.8V (-53V) & -1.2V (-1.2V) \\
-                & -51.2V (-52V)  & -51.8V (-53V) & -1.8V (-1.7V) \\
+    TR605 (npn) & -51.55V (-52V) & -52.08V (-53V) & -1.19V (-1.2V) \\
+                & -51.2V (-52V)  & -52.08V (-53V) & -1.76V (-1.7V) \\
     \hline
-    TR606 (pnp) & 1.1V (1V) & 1.76V (1.8V) & -1.25V (-1.2V) \\
-                & 1.7V (1.7V) & 2.4V  & -1.77V (-1.7V) \\  
+    TR606 (pnp) & 1.11V (1V) & 1.77V (1.8V) & -1.18V (-1.2V) \\
+                & 1.74V (1.7V) & 2.39V  & -1.73V (-1.7V) \\  
     \hline
-    TR607 (npn) & -0.6V (-0.6V)  & -1.25V (-1.2V) & 1.16V (1V) \\
-               & -1.13V (-1V)  & -1.73V (-1.7V) & 1.69V (1.7V) \\
+    TR607 (npn) & -0.55V (-0.6V)  & -1.17V (-1.2V) & 1.08V (1V) \\
+               & -1.11V (-1V)  & -1.72V (-1.7V) & 1.71V (1.7V) \\
     \hline
-    TR608 (npn) & 140mV (100mV) & 3mV (0V)  & 1.55V (1.5V)   \\
-                & 280mV (200mV)  & 3mV (0V) & 2.2V (2V)  \\
+    TR608 (npn) & 84mV (100mV) & 2.8mV (0V)  & 1.52V (1.5V)   \\
+                & 260mV (300mV)  & 2.6mV (0V) & 2.12V (2V)  \\
     \hline
-    TR609 (pnp) & -140mV (-200mV) & 3mV  & -0.95V (-1V)  \\
-                & -330mV  & 3mV  & -1.46V (-1.5V) \\
+    TR609 (pnp) & -130mV (-200mV) & 1.8mV  & -0.90V (-1V)  \\
+                & -330mV  & 1.8mV  & -1.46V (-1.41V) \\
     \hline
-    TR610 (npn) & 1.82V (1.78V) & 1.25V  & 43.24V (43V)  \\
-                & 2.41V (2.4V) & 1.79V    & 17.9V   \\
+    TR610 (npn) & 1.82V (1.78V) & 1.25V  & 43.8V (43V)  \\
+                & 2.41V (2.4V) & 1.79V    & 18.3V   \\
     \hline
-    TR611 (pnp) & -1.26V (-1.2V) & -0.66V (-0.6V) & -43.37V (-43V)  \\
-                & -1.78V (-1.74V) & -1.13V (-1V) & -17.9V (-17.0V) \\
+    TR611 (pnp) & -1.26V (-1.2V) & -0.66V (-0.6V) & -43.9V (-43V)  \\
+                & -1.78V (-1.74V) & -1.13V (-1V) & -18.24V (-17.0V) \\
     \hline
-    TR612 (npn) & 0.63V (0.6V) & 21mV (23mV) & 42.22V \\
-                & 1.12V (1V) & 0.4V (0.41V) & 17.8V \\
+    TR612 (npn) & 0.61V (0.6V) & 21mV (23mV) & 43.8V \\
+                & 1.1V (1V) & 0.4V (0.4V) & 18.3V \\
     \hline
-    TR613 (pnp) & -0.63V (-0.6V) & -20mV (-30mV)  & -42.52V   \\
-                & -1.12V (-1V) & -0.41V (-0.44V)  & -17.7V  \\
+    TR613 (pnp) & -0.616V (-0.6V) & -22.7mV (-30mV)  & -43.9V   \\
+                & -1.1V (-1V) & -0.41V (-0.44V)  & -18.24V  \\
     \hline
 	\end{tabular}
 \end{table}
@@ -398,8 +420,12 @@ The measured transistor voltages show good agreement with the reference values f
 		\hline
 		C601 &  &   2.2\,$\mu$F / 50\,V (Panasonic ECEA1HN470U) \\
         C605 &  &   47\,$\mu$F / 50\,V (Panasonic ECEA1HN2R2U)\\ 
-		C611 &  &   0.47\,$\mu$F / 63\,VAC 100\,VDC (Kemet R82EC3470AA70J) \\
-        
+		C611 &  &   0.47\,$\mu$F / 63\,VAC 100\,VDC (Kemet R82EC3470AA70J) \\ 
+		TR601, TR603, TR604 & 2SA673WL4,5 & KSA992F (OnSemi HFE $\approx$ 350) \\
+                TR605 & 2SC1124-2 & TTC004B (Toshiba HFE $\approx$ 180) \\
+                TR607 & 2SC458C & KSC1815Y (OnSemi HFE $\approx$ 130)\\
+                TR610 & 2SC1124-2 & TTC004B  (Toshiba HFE $\approx$ 180) \\
+                TR611 & 2SA706 3 & TTA004B (Toshiba HFE $\approx$ 180) \\
 		\hline
 	\end{tabular}
 \end{table}
